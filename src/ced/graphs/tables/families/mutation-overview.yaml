@@ -1,0 +1,576 @@
+template:
+  source:
+    kind: text
+    local: ./src/ced/graphs/data/placeholder.tsv
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC2564495/
+    delimiter: /t
+  statement:
+    subject:
+      method: value
+      encoding: camurati-englemann disease
+      prioritize:
+        - Disease
+      taxon_from: species_context_qualifier
+    predicate: has_mutation
+    object:
+      method: value
+      prioritize:
+        - SequenceVariant
+      taxon_from: species_context_qualifier
+    qualifiers:
+      - qualifier: species_context_qualifier
+        method: value
+        encoding: homo sapiens
+        prioritize:
+          - OrganismTaxon
+      - qualifier: disease_context_qualifier
+        method: value
+        encoding: camurati-englemann disease
+        prioritize:
+          - Disease
+  provenance:
+    repo: PMC
+    publication: PMC2564495
+  annotations:
+    - annotation: study_size
+      method: value
+    - annotation: number_of_cases
+      method: value
+    - annotation: effect_size
+      method: value
+    - annotation: effect_type
+      method: value
+      encoding: odds_ratio
+
+sections:
+  - statement:
+      object:
+        encoding: 28_36dup
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.044
+  - statement:
+      object:
+        encoding: 241T→C
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.044
+  - statement:
+      object:
+        encoding: 463C→T
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 4
+      - annotation: effect_size
+        encoding: 0.089
+  - statement:
+      object:
+        encoding: 652C→T
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 17
+      - annotation: effect_size
+        encoding: 0.378
+  - statement:
+      object:
+        encoding: 653G→A
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 10
+      - annotation: effect_size
+        encoding: 0.222
+  - statement:
+      object:
+        encoding: 664C→G
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.022
+  - statement:
+      object:
+        encoding: 667T→C
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.022
+  - statement:
+      object:
+        encoding: 667T→G
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.022
+  - statement:
+      object:
+        encoding: 673T→C
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 6
+      - annotation: effect_size
+        encoding: 0.133
+  - statement:
+      object:
+        encoding: L10‐L12dup
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.044
+  - statement:
+      object:
+        encoding: Y81H
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.044
+  - statement:
+      object:
+        encoding: R156C
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 4
+      - annotation: effect_size
+        encoding: 0.089
+  - statement:
+      object:
+        encoding: R218C
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 17
+      - annotation: effect_size
+        encoding: 0.378
+  - statement:
+      object:
+        encoding: R218H
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 10
+      - annotation: effect_size
+        encoding: 0.222
+  - statement:
+      object:
+        encoding: H222D
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.022
+  - statement:
+      object:
+        encoding: C223S
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.022
+  - statement:
+      object:
+        encoding: C223R
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.022
+  - statement:
+      object:
+        encoding: C223G
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.022
+  - statement:
+      object:
+        encoding: C225R
+        prioritize:
+          - Protein
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 6
+      - annotation: effect_size
+        encoding: 0.133
+  - statement:
+      object:
+        encoding: Exon 1
+        prioritize:
+          - Exon
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 4
+      - annotation: effect_size
+        encoding: 0.089
+  - statement:
+      object:
+        encoding: Exon 2
+        prioritize:
+          - Exon
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 4
+      - annotation: effect_size
+        encoding: 0.089
+  - statement:
+      object:
+        encoding: Exon 4
+        prioritize:
+          - Exon
+    annotations:
+      - annotation: study_size
+        encoding: 45
+      - annotation: number_of_cases
+        encoding: 37
+      - annotation: effect_size
+        encoding: 0.822
+  - statement:
+      subject:
+        method: value
+        encoding: 28_36dup
+        prioritize:
+          - SequenceVariant
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 1
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: 241T→C
+        prioritize:
+          - SequenceVariant
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 1
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: 463C→T
+        prioritize:
+          - SequenceVariant
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 2
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: 652C→T
+        prioritize:
+          - SequenceVariant
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: 653G→A
+        prioritize:
+          - SequenceVariant
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: 664C→G
+        prioritize:
+          - SequenceVariant
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: 667T→C
+        prioritize:
+          - SequenceVariant
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: 667T→G
+        prioritize:
+          - SequenceVariant
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: 673T→C
+        prioritize:
+          - SequenceVariant
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: L10‐L12dup
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 1
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: Y81H
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 1
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: R156C
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 2
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: R218C
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: R218H
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: H222D
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: C223S
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: C223R
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: C223G
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
+  - statement:
+      subject:
+        method: value
+        encoding: C225R
+        prioritize:
+          - Protein
+        taxon_from: species_context_qualifier
+      predicate: located_in
+      object:
+        method: value
+        encoding: Exon 4
+        prioritize:
+          - Exon
+        taxon_from: species_context_qualifier
+    annotations: []
