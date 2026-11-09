@@ -1,0 +1,14 @@
+# Format, lint, and stage changed YAML before each commit.
+default_install_hook_types = ["pre-commit"]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "yaml-lint"
+name = "Format and lint YAML"
+entry = "scripts/lint-yaml.sh"
+language = "system"
+types = ["yaml"]
+pass_filenames = true
+stages = ["pre-commit"]

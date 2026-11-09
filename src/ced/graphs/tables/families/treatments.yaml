@@ -1,0 +1,342 @@
+template:
+  source:
+    kind: text
+    local: ./src/ced/graphs/data/placeholder.tsv
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC2564495/
+    delimiter: /t
+  statement:
+    subject:
+      method: value
+      prioritize:
+        - Treatment
+      taxon_from: species_context_qualifier
+    predicate: applied_to_treat
+    object:
+      method: value
+      encoding: camurati-englemann disease
+      prioritize:
+        - Disease
+      taxon_from: species_context_qualifier
+    qualifiers:
+      - qualifier: species_context_qualifier
+        method: value
+        encoding: homo sapiens
+        prioritize:
+          - OrganismTaxon
+      - qualifier: population_context_qualifier
+        method: value
+        prioritize:
+          - PopulationOfIndividualOrganisms
+        taxon_from: species_context_qualifier
+  provenance:
+    repo: PMC
+    publication: PMC2564495
+  annotations:
+    - annotation: study_size
+      method: value
+    - annotation: number_of_cases
+      method: value
+
+sections:
+  - statement:
+      subject:
+        encoding: glucocorticoids
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 1
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: non-steroidal anti-inflammatory drugs
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 1
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: glucocorticoids
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 2
+    annotations:
+      - annotation: study_size
+        encoding: 5
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: glucocorticoids
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 3
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 2
+  - statement:
+      subject:
+        encoding: non-steroidal anti-inflammatory drugs
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 3
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 2
+  - statement:
+      subject:
+        encoding: analgesics
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 3
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 2
+  - statement:
+      subject:
+        encoding: bisphosphonates
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 3
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 2
+  - statement:
+      subject:
+        encoding: tibial osteotomy
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 3
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: femoral osteotomy
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 3
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: calcitonin
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 4
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: bisphosphonates
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 4
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: number_of_cases
+        encoding: 2
+  - statement:
+      subject:
+        encoding: glucocorticoids
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 5
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: non-steroidal anti-inflammatory drugs
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 5
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: analgesics
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 5
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: glucocorticoids
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 6
+    annotations:
+      - annotation: study_size
+        encoding: 6
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: bisphosphonates
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 6
+    annotations:
+      - annotation: study_size
+        encoding: 6
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: penicillin
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 8
+    annotations:
+      - annotation: study_size
+        encoding: 3
+  - statement:
+      subject:
+        encoding: gold salts
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 8
+    annotations:
+      - annotation: study_size
+        encoding: 3
+  - statement:
+      subject:
+        encoding: non-steroidal anti-inflammatory drugs
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 8
+    annotations:
+      - annotation: study_size
+        encoding: 3
+  - statement:
+      subject:
+        encoding: orbital decompression
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 10
+    annotations:
+      - annotation: study_size
+        encoding: 1
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: analgesics
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 11
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: number_of_cases
+        encoding: 2
+  - statement:
+      subject:
+        encoding: glucocorticoids
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 11
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: number_of_cases
+        encoding: 2
+  - statement:
+      subject:
+        encoding: non-steroidal anti-inflammatory drugs
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 12
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: number_of_cases
+        encoding: 2
+  - statement:
+      subject:
+        encoding: glucocorticoids
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 13
+    annotations:
+      - annotation: study_size
+        encoding: 4
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: glucocorticoids
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 17
+    annotations:
+      - annotation: study_size
+        encoding: 12
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: glucocorticoids
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 24
+    annotations:
+      - annotation: study_size
+        encoding: 6
+      - annotation: number_of_cases
+        encoding: 2
+  - statement:
+      subject:
+        encoding: hip surface replacement
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 24
+    annotations:
+      - annotation: study_size
+        encoding: 6
+      - annotation: number_of_cases
+        encoding: 1
+  - statement:
+      subject:
+        encoding: tibial, fibular, and femoral osteotomy
+      qualifiers:
+        - qualifier: population_context_qualifier
+          encoding: Family 24
+    annotations:
+      - annotation: study_size
+        encoding: 6
+      - annotation: number_of_cases
+        encoding: 1

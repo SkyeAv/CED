@@ -1,0 +1,13 @@
+extends: default
+rules:
+  document-start: disable
+  document-end: disable
+  # Prettier owns indentation, including expanded flow mappings that yamllint indents differently.
+  indentation: disable
+  line-length: { max: 120 }
+  key-duplicates: enable
+  trailing-spaces: enable
+  braces: { min-spaces-inside: 0, max-spaces-inside: 1 }
+  brackets: { min-spaces-inside: 0, max-spaces-inside: 1 }
+  quoted-strings: disable
+  comments: { min-spaces-from-content: 1 }
