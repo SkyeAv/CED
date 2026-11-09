@@ -3,7 +3,7 @@ template:
     kind: text
     local: ./src/ced/graphs/data/placeholder.tsv
     url: https://pmc.ncbi.nlm.nih.gov/articles/PMC2564495/
-    delimiter: "/t"
+    delimiter: /t
   statement:
     subject:
       method: value
