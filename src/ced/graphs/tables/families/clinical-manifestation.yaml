@@ -130,7 +130,7 @@ sections:
       - annotation: study_size
         encoding: 2
       - annotation: effect_size
-        encoding: 1.0
+        encoding: 0.66
   - statement:
       object:
         encoding: Family 13
@@ -154,7 +154,7 @@ sections:
       - annotation: study_size
         encoding: 10
       - annotation: effect_size
-        encoding: 1.0
+        encoding: 0.625
   - statement:
       object:
         encoding: Family 16
@@ -162,7 +162,7 @@ sections:
       - annotation: study_size
         encoding: 10
       - annotation: effect_size
-        encoding: 1.0
+        encoding: 0.83
   - statement:
       object:
         encoding: Family 17
@@ -170,7 +170,7 @@ sections:
       - annotation: study_size
         encoding: 10
       - annotation: effect_size
-        encoding: 1.0
+        encoding: 0.83
   - statement:
       object:
         encoding: Family 18
@@ -186,7 +186,7 @@ sections:
       - annotation: study_size
         encoding: 2
       - annotation: effect_size
-        encoding: 1.0
+        encoding: 0.66
   - statement:
       object:
         encoding: Family 20
@@ -194,7 +194,7 @@ sections:
       - annotation: study_size
         encoding: 2
       - annotation: effect_size
-        encoding: 1.0
+        encoding: 0.66
   - statement:
       object:
         encoding: Family 21
@@ -226,4 +226,4 @@ sections:
       - annotation: study_size
         encoding: 4
       - annotation: effect_size
-        encoding: 1.0
+        encoding: 0.66
