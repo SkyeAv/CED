@@ -7,6 +7,8 @@ template:
   statement:
     subject:
       method: value
+      prioritize:
+        - PopulationOfIndividualOrganisms
       taxon_from: species_context_qualifier
     predicate: location_of
     object:
