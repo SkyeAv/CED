@@ -1,0 +1,59 @@
+template:
+  source:
+    kind: text
+    local: ./src/ced/graphs/data/placeholder.tsv
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC2564495/
+    delimiter: /t
+  statement:
+    subject:
+      method: value
+      prioritize:
+        - PopulationOfIndividualOrganisms
+      taxon_from: species_context_qualifier
+    predicate: has_phenotype
+    object:
+      method: value
+      encoding: genu valgum
+      prioritize:
+        - PhenotypicFeature
+      taxon_from: species_context_qualifier
+    qualifiers:
+      - qualifier: species_context_qualifier
+        method: value
+        encoding: homo sapiens
+        prioritize:
+          - OrganismTaxon
+      - qualifier: disease_context_qualifier
+        method: value
+        encoding: camurati-englemann disease
+        prioritize:
+          - Disease
+  provenance:
+    repo: PMC
+    publication: PMC2564495
+  annotations:
+    - annotation: study_size
+      method: value
+    - annotation: effect_size
+      method: value
+    - annotation: effect_type
+      method: value
+      encoding: odds_ratio
+    - annotation: supporting_text
+      method: value
+
+sections:
+  - statement:
+      subject:
+        encoding: Family 14
+    annotations:
+      - annotation: supporting_text
+        encoding: Named finding; no patient fraction reported.
+  - statement:
+      subject:
+        encoding: Family 24
+    annotations:
+      - annotation: study_size
+        encoding: 6
+      - annotation: effect_size
+        encoding: 0.5

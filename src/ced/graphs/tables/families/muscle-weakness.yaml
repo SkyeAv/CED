@@ -1,0 +1,235 @@
+template:
+  source:
+    kind: text
+    local: ./src/ced/graphs/data/placeholder.tsv
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC2564495/
+    delimiter: /t
+  statement:
+    subject:
+      method: value
+      prioritize:
+        - PopulationOfIndividualOrganisms
+      taxon_from: species_context_qualifier
+    predicate: has_phenotype
+    object:
+      method: value
+      encoding: muscle weakness
+      prioritize:
+        - PhenotypicFeature
+      taxon_from: species_context_qualifier
+    qualifiers:
+      - qualifier: species_context_qualifier
+        method: value
+        encoding: homo sapiens
+        prioritize:
+          - OrganismTaxon
+      - qualifier: disease_context_qualifier
+        method: value
+        encoding: camurati-englemann disease
+        prioritize:
+          - Disease
+  provenance:
+    repo: PMC
+    publication: PMC2564495
+  annotations:
+    - annotation: study_size
+      method: value
+    - annotation: effect_size
+      method: value
+    - annotation: effect_type
+      method: value
+      encoding: odds_ratio
+
+sections:
+  - statement:
+      subject:
+        encoding: Family 1
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: effect_size
+        encoding: 0.0
+  - statement:
+      subject:
+        encoding: Family 2
+    annotations:
+      - annotation: study_size
+        encoding: 5
+      - annotation: effect_size
+        encoding: 0.4
+  - statement:
+      subject:
+        encoding: Family 3
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: effect_size
+        encoding: 0.66
+  - statement:
+      subject:
+        encoding: Family 4
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.0
+  - statement:
+      subject:
+        encoding: Family 5
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: effect_size
+        encoding: 0.33
+  - statement:
+      subject:
+        encoding: Family 6
+    annotations:
+      - annotation: study_size
+        encoding: 6
+      - annotation: effect_size
+        encoding: 0.16
+  - statement:
+      subject:
+        encoding: Family 7
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.5
+  - statement:
+      subject:
+        encoding: Family 8
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: effect_size
+        encoding: 0.33
+  - statement:
+      subject:
+        encoding: Family 9
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.0
+  - statement:
+      subject:
+        encoding: Family 10
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.0
+  - statement:
+      subject:
+        encoding: Family 11
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.0
+  - statement:
+      subject:
+        encoding: Family 12
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: effect_size
+        encoding: 0.33
+  - statement:
+      subject:
+        encoding: Family 13
+    annotations:
+      - annotation: study_size
+        encoding: 4
+      - annotation: effect_size
+        encoding: 1.0
+  - statement:
+      subject:
+        encoding: Family 14
+    annotations:
+      - annotation: study_size
+        encoding: 1
+      - annotation: effect_size
+        encoding: 1.0
+  - statement:
+      subject:
+        encoding: Family 15
+    annotations:
+      - annotation: study_size
+        encoding: 8
+      - annotation: effect_size
+        encoding: 0.5
+  - statement:
+      subject:
+        encoding: Family 16
+    annotations:
+      - annotation: study_size
+        encoding: 12
+      - annotation: effect_size
+        encoding: 0.58
+  - statement:
+      subject:
+        encoding: Family 17
+    annotations:
+      - annotation: study_size
+        encoding: 12
+      - annotation: effect_size
+        encoding: 0.58
+  - statement:
+      subject:
+        encoding: Family 18
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.5
+  - statement:
+      subject:
+        encoding: Family 19
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: effect_size
+        encoding: 0.66
+  - statement:
+      subject:
+        encoding: Family 20
+    annotations:
+      - annotation: study_size
+        encoding: 3
+      - annotation: effect_size
+        encoding: 0.66
+  - statement:
+      subject:
+        encoding: Family 21
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.5
+  - statement:
+      subject:
+        encoding: Family 22
+    annotations:
+      - annotation: study_size
+        encoding: 1
+      - annotation: effect_size
+        encoding: 1.0
+  - statement:
+      subject:
+        encoding: Family 23
+    annotations:
+      - annotation: study_size
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.5
+  - statement:
+      subject:
+        encoding: Family 24
+    annotations:
+      - annotation: study_size
+        encoding: 6
+      - annotation: effect_size
+        encoding: 0.66
