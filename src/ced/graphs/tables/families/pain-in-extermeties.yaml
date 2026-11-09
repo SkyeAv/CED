@@ -10,9 +10,10 @@ template:
       prioritize:
         - PopulationOfIndividualOrganisms
       taxon_from: species_context_qualifier
-    predicate: has_mutation
+    predicate: has_phenotype
     object:
       method: value
+      encoding: pain in extremities
       prioritize:
         - PhenotypicFeature
       taxon_from: species_context_qualifier
@@ -43,192 +44,192 @@ sections:
   - statement:
       subject:
         encoding: Family 1
-      object:
-        encoding: 673T→C
     annotations:
       - annotation: study_size
         encoding: 3
+      - annotation: effect_size
+        encoding: 0.66
   - statement:
       subject:
         encoding: Family 2
-      object:
-        encoding: 653G→A
     annotations:
       - annotation: study_size
         encoding: 5
+      - annotation: effect_size
+        encoding: 0.8
   - statement:
       subject:
         encoding: Family 3
-      object:
-        encoding: 652C→T
     annotations:
       - annotation: study_size
         encoding: 3
+      - annotation: effect_size
+        encoding: 0.66
   - statement:
       subject:
         encoding: Family 4
-      object:
-        encoding: 28_36dup
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 0.0
   - statement:
       subject:
         encoding: Family 5
-      object:
-        encoding: 241T→C
     annotations:
       - annotation: study_size
         encoding: 3
+      - annotation: effect_size
+        encoding: 0.33
   - statement:
       subject:
         encoding: Family 6
-      object:
-        encoding: 241T→C
     annotations:
       - annotation: study_size
         encoding: 6
+      - annotation: effect_size
+        encoding: 0.33
   - statement:
       subject:
         encoding: Family 7
-      object:
-        encoding: 653G→A
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 0.5
   - statement:
       subject:
         encoding: Family 8
-      object:
-        encoding: 653G→A
     annotations:
       - annotation: study_size
         encoding: 3
+      - annotation: effect_size
+        encoding: 0.33
   - statement:
       subject:
         encoding: Family 9
-      object:
-        encoding: 653G→A
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 0.5
   - statement:
       subject:
         encoding: Family 10
-      object:
-        encoding: 653G→A
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 0.0
   - statement:
       subject:
         encoding: Family 11
-      object:
-        encoding: 463C→T
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       subject:
         encoding: Family 12
-      object:
-        encoding: 673T→C
     annotations:
       - annotation: study_size
         encoding: 3
+      - annotation: effect_size
+        encoding: 0.66
   - statement:
       subject:
         encoding: Family 13
-      object:
-        encoding: 652C→T
     annotations:
       - annotation: study_size
         encoding: 4
+      - annotation: effect_size
+        encoding: 0.5
   - statement:
       subject:
         encoding: Family 14
-      object:
-        encoding: 664C→G
     annotations:
       - annotation: study_size
         encoding: 1
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       subject:
         encoding: Family 15
-      object:
-        encoding: 652C→T
     annotations:
       - annotation: study_size
-        encoding: 16
+        encoding: 8
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       subject:
         encoding: Family 16
-      object:
-        encoding: 673T→C
     annotations:
       - annotation: study_size
         encoding: 12
+      - annotation: effect_size
+        encoding: 0.83
   - statement:
       subject:
         encoding: Family 17
-      object:
-        encoding: 653G→A
     annotations:
       - annotation: study_size
         encoding: 12
+      - annotation: effect_size
+        encoding: 0.83
   - statement:
       subject:
         encoding: Family 18
-      object:
-        encoding: 652C→T
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       subject:
         encoding: Family 19
-      object:
-        encoding: 673T→C
     annotations:
       - annotation: study_size
         encoding: 3
+      - annotation: effect_size
+        encoding: 0.66
   - statement:
       subject:
         encoding: Family 20
-      object:
-        encoding: 673T→C
     annotations:
       - annotation: study_size
         encoding: 3
+      - annotation: effect_size
+        encoding: 0.66
   - statement:
       subject:
         encoding: Family 21
-      object:
-        encoding: 673T→C
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       subject:
         encoding: Family 22
-      object:
-        encoding: 652C→T
     annotations:
       - annotation: study_size
         encoding: 1
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       subject:
         encoding: Family 23
-      object:
-        encoding: 652C→T
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       subject:
         encoding: Family 24
-      object:
-        encoding: 653G→A
     annotations:
       - annotation: study_size
         encoding: 6
+      - annotation: effect_size
+        encoding: 0.5
