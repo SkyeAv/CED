@@ -34,6 +34,7 @@ template:
     - annotation: effect_type
       method: value
       encoding: odds_ratio
+
 sections:
   - statement:
       object:

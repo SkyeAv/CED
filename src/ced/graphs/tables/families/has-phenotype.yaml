@@ -33,6 +33,11 @@ template:
   annotations:
     - annotation: study_size
       method: value
+    - annotation: effect_size
+      method: value
+    - annotation: effect_type
+      method: value
+      encoding: odds_ratio
 
 sections:
   - statement:
