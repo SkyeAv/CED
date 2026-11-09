@@ -19,11 +19,6 @@ template:
         encoding: homo sapiens
         prioritize:
           - OrganismTaxon
-      - qualifier: disease_context_qualifier
-        method: value
-        encoding: camurati-englemann disease
-        prioritize:
-          - Disease
   provenance:
     repo: PMC
     publication: PMC2564495
