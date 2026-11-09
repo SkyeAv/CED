@@ -41,141 +41,189 @@ sections:
     annotations:
       - annotation: study_size
         encoding: 3
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 2
     annotations:
       - annotation: study_size
-        encoding: 5
+        encoding: 4
+      - annotation: effect_size
+        encoding: 0.8
   - statement:
       object:
         encoding: Family 3
     annotations:
       - annotation: study_size
-        encoding: 3
+        encoding: 2
+      - annotation: effect_size
+        encoding: 0.66
   - statement:
       object:
         encoding: Family 4
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 5
     annotations:
       - annotation: study_size
-        encoding: 3
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.33
   - statement:
       object:
         encoding: Family 6
     annotations:
       - annotation: study_size
-        encoding: 6
+        encoding: 3
+      - annotation: effect_size
+        encoding: 0.5
   - statement:
       object:
         encoding: Family 7
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 8
     annotations:
       - annotation: study_size
-        encoding: 3
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.33
   - statement:
       object:
         encoding: Family 9
     annotations:
       - annotation: study_size
-        encoding: 2
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.5
   - statement:
       object:
         encoding: Family 10
     annotations:
       - annotation: study_size
-        encoding: 2
+        encoding: 1
+      - annotation: effect_size
+        encoding: 0.5
   - statement:
       object:
         encoding: Family 11
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 12
     annotations:
       - annotation: study_size
-        encoding: 3
+        encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 13
     annotations:
       - annotation: study_size
         encoding: 4
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 14
     annotations:
       - annotation: study_size
         encoding: 1
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 15
     annotations:
       - annotation: study_size
-        encoding: 16
+        encoding: 10
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 16
     annotations:
       - annotation: study_size
-        encoding: 12
+        encoding: 10
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 17
     annotations:
       - annotation: study_size
-        encoding: 12
+        encoding: 10
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 18
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 19
     annotations:
       - annotation: study_size
-        encoding: 3
+        encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 20
     annotations:
       - annotation: study_size
-        encoding: 3
+        encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 21
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 22
     annotations:
       - annotation: study_size
         encoding: 1
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 23
     annotations:
       - annotation: study_size
         encoding: 2
+      - annotation: effect_size
+        encoding: 1.0
   - statement:
       object:
         encoding: Family 24
     annotations:
       - annotation: study_size
-        encoding: 6
+        encoding: 4
+      - annotation: effect_size
+        encoding: 1.0
