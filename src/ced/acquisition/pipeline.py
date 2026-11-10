@@ -154,10 +154,21 @@ def resolve_source(runtime: RuntimeConfig, source: SourceConfig, *, allow_downlo
     )
 
 
-def fetch_sources(runtime: RuntimeConfig, names: list[str], *, all_enabled: bool, assume_yes: bool) -> None:
+def fetch_sources(
+    runtime: RuntimeConfig,
+    names: list[str],
+    *,
+    groups: list[str] | None = None,
+    all_enabled: bool = False,
+    assume_yes: bool = False,
+) -> None:
     require_cpu_worker(runtime)
     sources = select_sources(
-        load_sources(runtime.source_directory), names, all_enabled=all_enabled, require_explicit=True
+        load_sources(runtime.source_directory),
+        names,
+        all_enabled=all_enabled,
+        groups=groups,
+        require_explicit=True,
     )
     prepared = [prepare_source(runtime, source, allow_download=True) for source in sources]
     remote = [item for item in prepared if not isinstance(item.source.acquisition, LocalAcquisition)]

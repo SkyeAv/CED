@@ -19,10 +19,14 @@ from ced.kg.writer import CanonicalBatchWriter
 from ced.preflight import require_cpu_worker, require_disk
 
 
-def build_graph(runtime: RuntimeConfig, names: list[str], *, fullmap_path: Path | None = None) -> Path:
+def build_graph(
+    runtime: RuntimeConfig, names: list[str], *, groups: list[str] | None = None, fullmap_path: Path | None = None
+) -> Path:
     require_cpu_worker(runtime)
     require_disk(runtime.artifact_path(), 0, runtime.disk_reserve_gb)
-    selected = select_sources(load_sources(runtime.source_directory), names, all_enabled=not names)
+    selected = select_sources(
+        load_sources(runtime.source_directory), names, all_enabled=not names and not groups, groups=groups
+    )
     supported = {"tablassert", "kgx_ndjson", "amalgam_compact"}
     for source in selected:
         if source.adapter not in supported:

@@ -78,17 +78,25 @@ def sources_list() -> None:
     from ced.config.sources import load_sources
 
     for source in load_sources(load_runtime().source_directory).values():
+        groups = ",".join(source.groups) or "-"
         print(
-            f"{source.name}\t{source.adapter}\t{source.acquisition.backend}\t{'enabled' if source.enabled else 'disabled'}"
+            f"{source.name}\t{source.adapter}\t{source.acquisition.backend}\t{groups}"
+            f"\t{'enabled' if source.enabled else 'disabled'}"
         )
 
 
 @app.command
-def fetch(source: list[str] | None = None, all_enabled: bool = False, yes: bool = False) -> None:
+def fetch(
+    source: list[str] | None = None,
+    group: list[str] | None = None,
+    all_enabled: bool = False,
+    yes: bool = False,
+) -> None:
     """Fetch only explicitly selected, pinned artifacts on wenceslaus."""
     arguments = [
         "fetch",
         *_many("--source", source),
+        *_many("--group", group),
         *(["--all-enabled"] if all_enabled else []),
         *(["--yes"] if yes else []),
     ]
@@ -96,24 +104,25 @@ def fetch(source: list[str] | None = None, all_enabled: bool = False, yes: bool 
     def action() -> None:
         from ced.acquisition.pipeline import fetch_sources
 
-        fetch_sources(load_runtime(), source or [], all_enabled=all_enabled, assume_yes=yes)
+        fetch_sources(load_runtime(), source or [], groups=group, all_enabled=all_enabled, assume_yes=yes)
 
     _remote_or_run(arguments, action)
 
 
 @app.command
-def build(source: list[str] | None = None, fullmap_path: Path | None = None) -> None:
+def build(source: list[str] | None = None, group: list[str] | None = None, fullmap_path: Path | None = None) -> None:
     """Build and merge selected source graphs without implicit downloads."""
     arguments = [
         "build",
         *_many("--source", source),
+        *_many("--group", group),
         *_many("--fullmap-path", [str(fullmap_path)] if fullmap_path else []),
     ]
 
     def action() -> None:
         from ced.kg.pipeline import build_graph
 
-        build_graph(load_runtime(), source or [], fullmap_path=fullmap_path)
+        build_graph(load_runtime(), source or [], groups=group, fullmap_path=fullmap_path)
 
     _remote_or_run(arguments, action)
 
