@@ -64,7 +64,10 @@ class SentenceTransformerTextEncoder(nn.Module):
         self.settings = settings
         self.model = SentenceTransformer(settings.model, device=device, local_files_only=settings.local_files_only)
         self.model.max_seq_length = settings.max_length
-        self.dimension = int(self.model.get_sentence_embedding_dimension())
+        embedding_dimension = self.model.get_sentence_embedding_dimension()
+        if embedding_dimension is None:
+            raise ValueError(f"configured model {settings.model} does not report an embedding dimension")
+        self.dimension = int(embedding_dimension)
         if self.dimension != settings.dimension:
             raise ValueError(
                 f"configured text dimension {settings.dimension} does not match model dimension {self.dimension}"
