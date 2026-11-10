@@ -210,7 +210,14 @@ def test_disk_graph_matches_in_memory_negatives_and_sampling(tmp_path: Path) -> 
     pools = typed_pools(edges, relations, splits, types)
     triples = [(10, 0, 12), (10, 1, 13)]
     disk = DiskGraph(
-        tmp_path / "graph.db", {"edge_index": edges, "relation_id": relations, "split": splits, "type_set_id": types}
+        tmp_path / "graph.db",
+        {
+            "head": edges[0],
+            "tail": edges[1],
+            "relation_id": relations,
+            "split": splits,
+            "type_set_id": types,
+        },
     )
     try:
         disk_heads, disk_tails, disk_valid = disk.negatives(triples, count=16, seed=7)
@@ -270,7 +277,8 @@ def test_training_checkpoint_resumes_epoch(tmp_path: Path) -> None:
 
     root = tmp_path
     topology = {
-        "edge_index": np.array([[0, 1], [1, 0]], dtype=np.int64),
+        "head": np.array([0, 1], dtype=np.int64),
+        "tail": np.array([1, 0], dtype=np.int64),
         "relation_id": np.array([0, 0], dtype=np.int64),
         "split": np.array([0, 1], dtype=np.int8),
         "type_set_id": np.array([0, 0], dtype=np.int64),

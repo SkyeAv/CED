@@ -29,7 +29,8 @@ class DiskGraph:
                 "INSERT INTO entities VALUES (?,?)",
                 ((i, int(types[i])) for i in range(start, min(start + 5000, len(types)))),
             )
-        edges, relations, splits = (arrays[key] for key in ("edge_index", "relation_id", "split"))
+        edges = np.stack((arrays["head"], arrays["tail"]))
+        relations, splits = (arrays[key] for key in ("relation_id", "split"))
         for start in range(0, len(relations), 5000):
             end = min(start + 5000, len(relations))
             self.connection.executemany(

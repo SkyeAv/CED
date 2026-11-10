@@ -206,7 +206,13 @@ class DatasetManifest(ConfigBase):
 
     @model_validator(mode="after")
     def topology_shapes(self) -> DatasetManifest:
-        expected = {"edge_index": [2, self.statements], "relation_id": [self.statements], "split": [self.statements]}
+        expected = {
+            "head": [self.statements],
+            "tail": [self.statements],
+            "relation_id": [self.statements],
+            "split": [self.statements],
+            "type_set_id": [self.entities],
+        }
         for key, shape in expected.items():
             if key not in self.tensors or self.tensors[key].shape != shape:
                 raise ValueError(f"unaligned topology tensor: {key}")

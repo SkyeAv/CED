@@ -17,7 +17,12 @@ def write_batch_shards(
 ) -> list[TrainingExample]:
     from ced.model.prepare import save_tensor
 
-    edges, relations, splits, types = (arrays[key] for key in ("edge_index", "relation_id", "split", "type_set_id"))
+    head, tail, relations, splits, types = (
+        arrays[key] for key in ("head", "tail", "relation_id", "split", "type_set_id")
+    )
+    # The PyG convention (2, E) is built once from the streamed head/tail columns;
+    # nothing downstream keeps a transposed copy on disk.
+    edges = np.stack((head, tail))
     examples = []
     # Keep seed positives small enough to accommodate all global negative endpoints.
     chunk_size = max(1, runtime.batch.node_limit // (2 * (runtime.split.negatives + 1)))

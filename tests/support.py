@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 
 from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.model.prepare import save_tensor
-from ced.model.schemas import DatasetManifest, GraphBatch, NegativeBatch, TrainingExample
+from ced.model.schemas import DatasetManifest, GraphBatch, NegativeBatch, TensorRef, TrainingExample
 
 
 def write_table(path: Path, column: str, values: list[Any]) -> None:
@@ -19,16 +19,57 @@ def write_table(path: Path, column: str, values: list[Any]) -> None:
 def synthetic_dataset(root: Path, *, batches: int = 3, nodes_per_batch: int = 64) -> int:
     root.mkdir(parents=True, exist_ok=True)
     statements = 3
+    pq.write_table(
+        pa.table(
+            {
+                "index": pa.array([0, 1, 2], pa.int64()),
+                "statement_id": pa.array(["s0", "s1", "s2"], pa.string()),
+                "group_id": pa.array(["g0", "g1", "g2"], pa.string()),
+                "split": pa.array([0, 1, 2], pa.int8()),
+                "head": pa.array([0, 0, 1], pa.int64()),
+                "tail": pa.array([1, 2, 2], pa.int64()),
+                "relation_id": pa.array([0, 0, 0], pa.int64()),
+            }
+        ),
+        root / "topology.parquet",
+        compression="zstd",
+    )
+    pq.write_table(
+        pa.table(
+            {
+                "id": pa.array(["CED:Family_1", "CED:Family_2", "X:3"], pa.string()),
+                "type_set_id": pa.array([0, 0, 0], pa.int64()),
+            }
+        ),
+        root / "entities.parquet",
+    )
+    topology_digest = sha256_file(root / "topology.parquet")
+    entities_digest = sha256_file(root / "entities.parquet")
+
+    def topology_ref(column: str, dtype: str) -> TensorRef:
+        return TensorRef(
+            path="topology.parquet",
+            column=column,
+            format="parquet",
+            dtype=dtype,
+            shape=[statements],
+            sha256=topology_digest,
+        )
+
     tensors = {
-        name: save_tensor(root, name, values)
-        for name, values in {
-            "edge_index": np.array([[0, 0, 1], [1, 2, 2]], dtype=np.int64),
-            "relation_id": np.zeros(statements, dtype=np.int64),
-            "split": np.array([0, 1, 2], dtype=np.int8),
-            "type_set_id": np.zeros(3, dtype=np.int64),
-        }.items()
+        "head": topology_ref("head", "int64"),
+        "tail": topology_ref("tail", "int64"),
+        "relation_id": topology_ref("relation_id", "int64"),
+        "split": topology_ref("split", "int8"),
+        "type_set_id": TensorRef(
+            path="entities.parquet",
+            column="type_set_id",
+            format="parquet",
+            dtype="int64",
+            shape=[statements],
+            sha256=entities_digest,
+        ),
     }
-    write_table(root / "entities.parquet", "id", ["CED:Family_1", "CED:Family_2", "X:3"])
     write_table(root / "relations.parquet", "id", ["p"])
     write_table(root / "types.parquet", "categories", [["biolink:Gene"]])
     pq.write_table(

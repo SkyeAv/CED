@@ -90,7 +90,7 @@ def prepare_features(
 ) -> tuple[list[FeatureFieldSpec], FeatureStoreArtifact]:
     """Fit categorical/numeric fields on training owners; held-out strings map to unknown=0."""
     connection.read_parquet(str(snapshot / "attributes/*.parquet")).create_view("attributes")
-    connection.read_json(str(root / "split-records.ndjson")).create_view("splits")
+    connection.read_parquet(str(root / "topology.parquet")).create_view("splits")
     connection.execute("CREATE TABLE training_statements AS SELECT statement_id FROM splits WHERE split=0")
     connection.execute(
         "CREATE TABLE training_nodes AS SELECT subject AS id FROM statements JOIN training_statements t ON statements.id=t.statement_id UNION SELECT object FROM statements JOIN training_statements t ON statements.id=t.statement_id"

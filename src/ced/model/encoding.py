@@ -186,7 +186,7 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
             WHERE f.kind='text'"""
         statement_query = f"""SELECT {node_count}+s.index AS owner_index, f.field_id, f.ordinal, 'statement' AS role, NULL AS language, f.text
             FROM read_parquet('{root}/statement-features.parquet') f
-            JOIN read_json('{root}/split-records.ndjson') s ON f.owner_id=s.statement_id
+            JOIN read_parquet('{root}/topology.parquet') s ON f.owner_id=s.statement_id
             WHERE f.kind='text'"""
         query = common.format(f"{node_query} UNION ALL BY NAME {statement_query}")
         partial = root / "text-records.partial.parquet"
