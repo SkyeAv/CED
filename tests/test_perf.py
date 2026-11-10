@@ -19,7 +19,7 @@ pytestmark = pytest.mark.perf
 
 
 def test_perf_typed_pools_and_negatives() -> None:
-    from ced.model.negatives import sample_negatives, typed_pools
+    from ced.model.negatives import negative_context, sample_negatives, typed_pools
 
     graph = synthetic_graph(nodes=2000, edges=20000, relations=8, type_sets=4, seed=1)
     edges, relations, splits, types = (
@@ -32,11 +32,13 @@ def test_perf_typed_pools_and_negatives() -> None:
     triple_indices = train[np.linspace(0, len(train) - 1, 200).astype(int)]
     triples = [(int(edges[0, i]), int(relations[i]), int(edges[1, i])) for i in triple_indices]
     positives = {(int(h), int(r), int(t)) for h, r, t in zip(edges[0], relations, edges[1], strict=True)}
+    _ = positives  # retained for workload parity; production passes encoded keys
+    context = negative_context(edges[0], relations, edges[1])
     workload = {"nodes": 2000, "edges": 20000, "relations": 8, "type_sets": 4, "triples": len(triples), "count": 8}
 
     pools_seconds = timed(lambda: typed_pools(edges, relations, splits, types), iterations=3)
     pools = typed_pools(edges, relations, splits, types)
-    negatives_seconds = timed(lambda: sample_negatives(triples, pools, positives, count=8, seed=7), iterations=3)
+    negatives_seconds = timed(lambda: sample_negatives(triples, pools, context, count=8, seed=7), iterations=3)
     write_record("typed_pools", seconds=pools_seconds, iterations=3, workload=workload)
     write_record("sample_negatives", seconds=negatives_seconds, iterations=3, workload=workload)
 

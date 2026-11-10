@@ -8,7 +8,7 @@ import numpy as np
 from ced.config.models import RuntimeConfig
 from ced.model.batches import sample_neighborhood
 from ced.model.disk_graph import DiskGraph
-from ced.model.negatives import sample_negatives, typed_pools
+from ced.model.negatives import negative_context, sample_negatives, typed_pools
 from ced.model.schemas import GraphBatch, NegativeBatch, TrainingExample
 
 
@@ -28,9 +28,9 @@ def write_batch_shards(
     chunk_size = max(1, runtime.batch.node_limit // (2 * (runtime.split.negatives + 1)))
     disk: DiskGraph | None = None
     pools = typed_pools(edges, relations, splits, types) if in_memory else None
-    known = (
-        {(int(h), int(r), int(t)) for h, r, t in zip(edges[0], relations, edges[1], strict=True)} if in_memory else None
-    )
+    # Encoded once for all chunks: repeated per-chunk negative sampling must not
+    # re-walk every positive statement in Python.
+    context = negative_context(edges[0], relations, edges[1]) if in_memory else None
     parameter_keys: dict[tuple[int, int, int], int] = {}
     edge_types = np.zeros(len(relations), dtype=np.int64)
     for index in np.flatnonzero(splits == 0):
@@ -43,9 +43,9 @@ def write_batch_shards(
             triples = [(int(edges[0, i]), int(relations[i]), int(edges[1, i])) for i in positive]
             if in_memory:
                 assert pools is not None
-                assert known is not None
+                assert context is not None
                 head, tail, valid = sample_negatives(
-                    triples, pools, known, count=runtime.split.negatives, seed=runtime.split.seed + start + split_id
+                    triples, pools, context, count=runtime.split.negatives, seed=runtime.split.seed + start + split_id
                 )
             else:
                 disk = disk or DiskGraph(root / "graph.db", arrays)
