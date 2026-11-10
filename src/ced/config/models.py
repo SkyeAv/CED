@@ -73,6 +73,7 @@ class RuntimeConfig(ConfigBase):
     memory_limit: str = "16GB"
     disk_reserve_gb: float = Field(default=32, ge=0)
     download_connections: int = Field(default=8, ge=1, le=32)
+    download_jobs: int = Field(default=4, ge=1, le=4)
     source_directory: Path = Path("src/ced/config/sources")
     graph_config: Path = Path("src/ced/graphs/ced-graph.yaml")
     modal: ModalSettings = Field(default_factory=ModalSettings)
@@ -99,7 +100,12 @@ class RuntimeConfig(ConfigBase):
             "POLARS_MAX_THREADS",
             "RAYON_NUM_THREADS",
         )
-        return dict.fromkeys(names, workers) | {"CED_REMOTE_WORKER": "1", "CED_CPU_WORKERS": workers, "PYTHONUTF8": "1"}
+        return dict.fromkeys(names, workers) | {
+            "CED_REMOTE_WORKER": "1",
+            "CED_CPU_WORKERS": workers,
+            "CED_DOWNLOAD_JOBS": str(self.download_jobs),
+            "PYTHONUTF8": "1",
+        }
 
     def artifact_path(self, *parts: str) -> Path:
         root = self.artifact_root
