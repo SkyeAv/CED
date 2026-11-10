@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from ced.acquisition.archive import extract_archive
 from ced.acquisition.aria2 import Aria2Backend
 from ced.acquisition.base import AcquisitionBackend, FetchedArtifact, atomic_write_json
+from ced.acquisition.http import HttpBackend
 from ced.acquisition.huggingface import HuggingFaceBackend
 from ced.acquisition.local import LocalBackend
 from ced.config.models import RuntimeConfig
@@ -87,6 +88,8 @@ def _backend(runtime: RuntimeConfig, source: SourceConfig) -> AcquisitionBackend
         return HuggingFaceBackend(runtime, source)
     if source.acquisition.backend == "aria2":
         return Aria2Backend(runtime, source)
+    if source.acquisition.backend == "http":
+        return HttpBackend(runtime, source)
     if source.acquisition.backend == "local":
         return LocalBackend(runtime, source)
     raise ValueError(f"unsupported acquisition backend: {source.acquisition.backend}")

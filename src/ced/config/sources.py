@@ -68,13 +68,22 @@ class Aria2Acquisition(ConfigBase):
     headers: dict[str, str] = Field(default_factory=dict)
 
 
+class HttpAcquisition(ConfigBase):
+    backend: Literal["http"]
+    connections: int | None = Field(default=None, ge=1, le=32)
+    headers: dict[str, str] = Field(default_factory=dict)
+    segment_bytes: int | None = Field(default=None, ge=1024, le=1024**3)
+    max_tries: int = Field(default=5, ge=1, le=10)
+    retry_wait_seconds: float = Field(default=5, gt=0, le=300)
+
+
 class LocalAcquisition(ConfigBase):
     backend: Literal["local"]
     root: Path
 
 
 AcquisitionConfig = Annotated[
-    HuggingFaceAcquisition | Aria2Acquisition | LocalAcquisition, Field(discriminator="backend")
+    HuggingFaceAcquisition | Aria2Acquisition | HttpAcquisition | LocalAcquisition, Field(discriminator="backend")
 ]
 
 
