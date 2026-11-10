@@ -12,14 +12,17 @@ import json
 import shutil
 from pathlib import Path
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+import torch
 
 from ced.acquisition.base import sha256_file
 from ced.config.models import RuntimeConfig, SplitSettings
 from ced.kg.audit import validate_checksums
 from ced.kg.writer import ATTRIBUTE_SCHEMA, NODE_SCHEMA, STATEMENT_SCHEMA
+from ced.model.feature_index import FeatureIndex
 from ced.model.prepare import prepare_dataset
 from ced.model.schemas import TensorRef
 from ced.model.split import group_split, split_bounds, statement_group
@@ -226,3 +229,114 @@ def test_sql_split_case_matches_python_reference() -> None:
     assert len(rows) >= 5
     for group_id, split in rows:
         assert group_split(group_id, settings, schema=split == 3) == split
+
+
+def test_write_indptr_covers_owners_without_rows(tmp_path: Path) -> None:
+    """CSR offsets must give every owner an explicit entry, including empty ones.
+
+    Why: FeatureIndex selects rows with searchsorted over the owner column, and a
+    sparse or shifted indptr would attribute one entity's attributes to another.
+    Owners with no attributes must still advance the offset by zero.
+    """
+    import duckdb
+
+    from ced.model.feature_store import write_indptr
+
+    source = tmp_path / "categorical.parquet"
+    pq.write_table(
+        pa.table(
+            {
+                "owner_index": pa.array([0, 0, 2, 2, 5], pa.int64()),
+                "field_id": pa.array([1, 2, 1, 3, 9], pa.int64()),
+            }
+        ),
+        source,
+        compression="zstd",
+    )
+    connection = duckdb.connect()
+    try:
+        reference = write_indptr(connection, source, 7, tmp_path / "categorical-indptr.parquet")
+    finally:
+        connection.close()
+    assert reference.shape == [8]
+    assert reference.load(tmp_path).tolist() == [0, 2, 2, 4, 4, 4, 5, 5]
+
+
+def test_write_indptr_rejects_owners_outside_range(tmp_path: Path) -> None:
+    """An owner outside [0, owners] must fail loudly, never produce a short CSR.
+
+    Why: that mismatch means the owner index and the entity vocabulary disagree.
+    Silently dropping those rows would delete attributes from the feature store
+    without any trace downstream.
+    """
+    import duckdb
+
+    from ced.model.feature_store import write_indptr
+
+    source = tmp_path / "categorical.parquet"
+    pq.write_table(
+        pa.table({"owner_index": pa.array([0, 9], pa.int64()), "field_id": pa.array([1, 2], pa.int64())}),
+        source,
+        compression="zstd",
+    )
+    connection = duckdb.connect()
+    try:
+        with pytest.raises(ValueError, match="CSR invariants"):
+            write_indptr(connection, source, 5, tmp_path / "categorical-indptr.parquet")
+    finally:
+        connection.close()
+
+
+def test_prepare_dataset_emits_ordered_feature_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Feature columns are streamed Parquet, owner-ordered, with a valid CSR index.
+
+    Why: the ORDER BY in each COPY is load-bearing. FeatureIndex selects rows by
+    binary search over the owner column, so an unordered file would silently return
+    the wrong attributes for every owner. This pins the ordering, the dtype of each
+    column and the row totals against the fixture.
+    """
+    _, dataset, _runtime = prepare(tmp_path, monkeypatch)
+    manifest = json.loads((dataset / "manifest.json").read_text())
+    features = manifest["features"]
+
+    categorical = features["categorical"]
+    for name, reference in categorical.items():
+        assert reference["format"] == "parquet", name
+        assert reference["dtype"] == "int64", name
+    assert categorical["owner_id"]["path"] == "categorical.parquet"
+    assert categorical["indptr"]["path"] == "categorical-indptr.parquet"
+
+    owners = manifest["entities"] + manifest["statements"]
+    owner_column = TensorRef.model_validate(categorical["owner_id"]).load(dataset)
+    indptr = TensorRef.model_validate(categorical["indptr"]).load(dataset)
+    assert np.diff(owner_column).min(initial=0) >= 0
+    assert indptr.shape == (owners + 1,)
+    assert indptr[0] == 0
+    assert indptr[-1] == owner_column.shape[0]
+    assert np.all(np.diff(indptr) >= 0)
+
+    # Fixture: one numeric event on N0 (entity idx 0), one categorical on N1 (idx 1),
+    # one long text event on statement s0, so the CSR has a single step at owner 2.
+    assert owner_column.tolist() == [1]
+    assert indptr.tolist() == [0, 0, 1] + [1] * (owners - 2)
+
+    numeric = features["numeric"]
+    assert numeric["value"]["dtype"] == "float32"
+    assert numeric["valid"]["dtype"] == "bool"
+    assert TensorRef.model_validate(numeric["owner_id"]).load(dataset).tolist() == [0]
+    assert TensorRef.model_validate(numeric["valid"]).load(dataset).tolist() == [True]
+    value = TensorRef.model_validate(numeric["value"]).load(dataset)
+    assert np.isfinite(value).all()
+
+    text_rows = 0
+    for owner in ("node", "statement"):
+        table = pq.read_table(dataset / f"{owner}-features.parquet")
+        text_rows += sum(1 for kind in table.column("kind").to_pylist() if kind == "text")
+    assert text_rows == 1
+
+    index = FeatureIndex(dataset, manifest)
+    rows, fields, values = index.categorical_rows(torch.tensor([1], dtype=torch.long))
+    assert rows.tolist() == [0]
+    assert len(values) == 1
+    assert fields.shape == rows.shape
+    assert index.numeric_rows(torch.tensor([0], dtype=torch.long))[0].tolist() == [0]

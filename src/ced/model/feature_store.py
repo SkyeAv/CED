@@ -4,85 +4,47 @@ from pathlib import Path
 
 import duckdb
 import numpy as np
-import torch
+import pyarrow.parquet as pq
 
+from ced.acquisition.base import sha256_file
 from ced.model.schemas import CategoricalCsr, FeatureFieldSpec, FeatureStoreArtifact, NumericCoo, TensorRef
 
 
-def _save(root: Path, name: str, values: np.ndarray) -> TensorRef:
-    from ced.acquisition.base import sha256_file
+def write_indptr(connection: duckdb.DuckDBPyConnection, source: Path, owners: int, destination: Path) -> TensorRef:
+    """Write CSR offsets for every owner in [0, owners] from an owner-ordered column file.
 
-    if isinstance(values, np.memmap):
-        values.flush()
-    else:
-        np.save(root / f"{name}.npy", values, allow_pickle=False)
-    return TensorRef(
-        path=f"{name}.npy", dtype=str(values.dtype), shape=list(values.shape), sha256=sha256_file(root / f"{name}.npy")
+    ``indptr[o]`` is the number of rows whose owner index is below ``o``, so owners
+    with no rows contribute explicit zeros and the CSR stays dense over all owners.
+    The window runs over ``generate_series`` left-joined to per-owner counts, which
+    DuckDB streams and spills under the configured memory limit instead of holding
+    a Python histogram of every owner in RAM.
+    """
+    connection.execute(
+        f"""
+        COPY (
+          SELECT CAST(coalesce(sum(n) OVER (ORDER BY owner ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0)
+                     AS BIGINT) AS value
+          FROM (SELECT g.owner AS owner, coalesce(p.n, 0) AS n
+                FROM generate_series(0, {owners}) AS g(owner)
+                LEFT JOIN (SELECT owner_index, count(*) AS n
+                           FROM read_parquet('{source}') GROUP BY owner_index) p
+                  ON p.owner_index = g.owner)
+          ORDER BY owner)
+        TO '{destination}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
     )
-
-
-def _write_ordered(
-    connection: duckdb.DuckDBPyConnection, query: str, root: Path, prefix: str, owners: int
-) -> tuple[list[TensorRef], int]:
-    count = connection.execute(f"SELECT count(*) FROM ({query})").fetchone()
-    assert count is not None
-    columns = {
-        "owner": np.lib.format.open_memmap(root / f"{prefix}-owner.npy", mode="w+", dtype="int64", shape=(count[0],)),
-        "field": np.lib.format.open_memmap(root / f"{prefix}-field.npy", mode="w+", dtype="int64", shape=(count[0],)),
-    }
-    if prefix == "categorical":
-        extras = {
-            "value": np.lib.format.open_memmap(
-                root / f"{prefix}-value.npy", mode="w+", dtype="int64", shape=(count[0],)
-            ),
-            "ordinal": np.lib.format.open_memmap(
-                root / f"{prefix}-ordinal.npy", mode="w+", dtype="int64", shape=(count[0],)
-            ),
-        }
-    else:
-        extras = {
-            "value": np.lib.format.open_memmap(
-                root / f"{prefix}-value.npy", mode="w+", dtype="float32", shape=(count[0],)
-            ),
-            "valid": np.lib.format.open_memmap(
-                root / f"{prefix}-valid.npy", mode="w+", dtype="bool", shape=(count[0],)
-            ),
-        }
-    offsets = np.zeros(owners + 1, dtype=np.int64)
-    position = 0
-    for batch in connection.execute(f"SELECT * FROM ({query})").fetch_record_batch(5000):
-        rows = batch.to_pylist()
-        end = position + len(rows)
-        columns["owner"][position:end] = [row["owner_index"] for row in rows]
-        columns["field"][position:end] = [row["field_id"] for row in rows]
-        if prefix == "categorical":
-            extras["value"][position:end] = [row["value_id"] for row in rows]
-            extras["ordinal"][position:end] = [row["ordinal"] for row in rows]
-        else:
-            extras["value"][position:end] = [row["numeric"] if row["numeric"] is not None else 0 for row in rows]
-            extras["valid"][position:end] = [bool(row["valid"]) for row in rows]
-        for owner in [row["owner_index"] for row in rows]:
-            offsets[owner + 1] += 1
-        position = end
-    if position != count[0]:
-        raise ValueError(f"feature row count mismatch: {prefix}")
-    offsets[:] = torch.from_numpy(offsets).cumsum(0).numpy()
-    if prefix == "categorical":
-        refs = [
-            _save(root, f"{prefix}-owner", columns["owner"]),
-            _save(root, f"{prefix}-field", columns["field"]),
-            _save(root, f"{prefix}-value", extras["value"]),
-            _save(root, f"{prefix}-ordinal", extras["ordinal"]),
-            _save(root, f"{prefix}-indptr", offsets),
-        ]
-    else:
-        refs = [
-            _save(root, f"{prefix}-owner", columns["owner"]),
-            _save(root, f"{prefix}-field", columns["field"]),
-            _save(root, f"{prefix}-value", extras["value"]),
-            _save(root, f"{prefix}-valid", extras["valid"]),
-        ]
-    return refs, count[0]
+    values = pq.read_table(destination, columns=["value"]).column("value").to_numpy(zero_copy_only=False)
+    rows = connection.execute(f"SELECT count(*) FROM read_parquet('{source}')").fetchone()
+    assert rows is not None
+    if len(values) != owners + 1 or values[0] != 0 or values[-1] != rows[0] or bool((np.diff(values) < 0).any()):
+        raise ValueError(f"categorical indptr violates CSR invariants: {destination.name}")
+    return TensorRef(
+        path=destination.name,
+        column="value",
+        format="parquet",
+        dtype="int64",
+        shape=[owners + 1],
+        sha256=sha256_file(destination),
+    )
 
 
 def prepare_features(
@@ -131,30 +93,62 @@ def prepare_features(
         LEFT JOIN fitted_fields f ON e.owner_kind=f.owner_kind AND e.path=f.path AND e.kind=f.kind
         LEFT JOIN fitted_categories c ON e.owner_kind=c.owner_kind AND e.path=c.path AND e.raw_json=c.raw_json
         WHERE (e.owner_kind='node' AND e2.idx IS NOT NULL) OR (e.owner_kind='statement' AND s.index IS NOT NULL)"""
-    categorical_refs, categorical_count = _write_ordered(
-        connection,
-        f"SELECT owner_index,field_id,ordinal,value_id FROM ({base}) WHERE kind='categorical' ORDER BY owner_index,field_id,ordinal",
-        root,
-        "categorical",
-        node_count + statement_count,
+    owners = node_count + statement_count
+    categorical_path = root / "categorical.parquet"
+    connection.execute(
+        f"""COPY (SELECT CAST(owner_index AS BIGINT) AS owner_index, CAST(field_id AS BIGINT) AS field_id,
+                     CAST(value_id AS BIGINT) AS value_id, CAST(ordinal AS BIGINT) AS ordinal
+              FROM ({base}) WHERE kind='categorical' ORDER BY owner_index, field_id, ordinal)
+           TO '{categorical_path}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
     )
-    numeric_refs, numeric_count = _write_ordered(
-        connection,
-        f"SELECT owner_index,field_id,0 AS ordinal,numeric,valid FROM ({base}) WHERE kind='numeric' ORDER BY owner_index,field_id",
-        root,
-        "numeric",
-        node_count + statement_count,
+    categorical_rows = connection.execute(f"SELECT count(*) FROM read_parquet('{categorical_path}')").fetchone()
+    assert categorical_rows is not None
+    categorical_digest = sha256_file(categorical_path)
+
+    def categorical_ref(column: str) -> TensorRef:
+        return TensorRef(
+            path="categorical.parquet",
+            column=column,
+            format="parquet",
+            dtype="int64",
+            shape=[categorical_rows[0]],
+            sha256=categorical_digest,
+        )
+
+    numeric_path = root / "numeric.parquet"
+    connection.execute(
+        f"""COPY (SELECT CAST(owner_index AS BIGINT) AS owner_index, CAST(field_id AS BIGINT) AS field_id,
+                     CAST(coalesce(numeric, 0) AS REAL) AS value, CAST(valid AS BOOLEAN) AS valid
+              FROM ({base}) WHERE kind='numeric' ORDER BY owner_index, field_id)
+           TO '{numeric_path}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
     )
+    numeric_rows = connection.execute(f"SELECT count(*) FROM read_parquet('{numeric_path}')").fetchone()
+    assert numeric_rows is not None
+    numeric_digest = sha256_file(numeric_path)
+
+    def numeric_ref(column: str, dtype: str) -> TensorRef:
+        return TensorRef(
+            path="numeric.parquet",
+            column=column,
+            format="parquet",
+            dtype=dtype,
+            shape=[numeric_rows[0]],
+            sha256=numeric_digest,
+        )
+
     artifact = FeatureStoreArtifact(
         categorical=CategoricalCsr(
-            owner_id=categorical_refs[0],
-            field_id=categorical_refs[1],
-            value_id=categorical_refs[2],
-            ordinal=categorical_refs[3],
-            indptr=categorical_refs[4],
+            owner_id=categorical_ref("owner_index"),
+            field_id=categorical_ref("field_id"),
+            value_id=categorical_ref("value_id"),
+            ordinal=categorical_ref("ordinal"),
+            indptr=write_indptr(connection, categorical_path, owners, root / "categorical-indptr.parquet"),
         ),
         numeric=NumericCoo(
-            owner_id=numeric_refs[0], field_id=numeric_refs[1], value=numeric_refs[2], valid=numeric_refs[3]
+            owner_id=numeric_ref("owner_index", "int64"),
+            field_id=numeric_ref("field_id", "int64"),
+            value=numeric_ref("value", "float32"),
+            valid=numeric_ref("valid", "bool"),
         ),
     )
     # Raw events (including text) remain in Parquet for future providers; unknown channels stay explicit.
@@ -170,5 +164,4 @@ def prepare_features(
         connection.execute(
             f"COPY ({query}) TO '{root / (owner + '-features.parquet')}' (FORMAT PARQUET, COMPRESSION ZSTD)"
         )
-    _ = (categorical_count, numeric_count)
     return fields, artifact
