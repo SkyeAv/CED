@@ -62,6 +62,129 @@ def test_tensor_ref_checks_actual_dtype_shape_and_hash(tmp_path: Path) -> None:
         ref.load(tmp_path)
 
 
+@pytest.mark.parametrize(
+    ("dtype", "values"),
+    [
+        ("int64", np.array([0, -1, 2], dtype=np.int64)),
+        ("float32", np.array([0.5, -1.25, 2.0], dtype=np.float32)),
+        ("bool", np.array([True, False, True])),
+        ("int8", np.array([0, 3, 2], dtype=np.int8)),
+    ],
+)
+def test_parquet_tensor_ref_round_trips_every_supported_dtype(tmp_path: Path, dtype: str, values: np.ndarray) -> None:
+    """Parquet is the replacement for .npy, so every model dtype must survive it exactly.
+
+    Why: a dtype that silently widens, changes signedness or decodes nulls as zeros
+    would corrupt entity indices and feature values long after preparation finished,
+    and nothing downstream re-checks the file.
+    """
+    ref = save_tensor(tmp_path, "values", values, format="parquet")
+    assert ref.format == "parquet"
+    assert ref.dtype == dtype
+    assert ref.shape == [3]
+    assert (tmp_path / "values.parquet").is_file()
+    loaded = ref.load(tmp_path)
+    assert loaded.dtype == np.dtype(dtype)
+    assert np.array_equal(loaded, values)
+    assert loaded.flags.writeable
+    assert loaded.flags.c_contiguous
+
+
+def test_parquet_tensor_ref_restores_multidimensional_shape(tmp_path: Path) -> None:
+    """A rank-2 tensor must come back with its shape, from one flat C-order column.
+
+    Why: batch shards store (2, E) edge_index and (rows, negatives) candidate
+    matrices. Flattening on write and reshaping on read is the single convention
+    that covers every rank; getting it wrong would transpose message passing.
+    """
+    values = np.arange(6, dtype=np.int64).reshape(2, 3)
+    ref = save_tensor(tmp_path, "edge_index", values, format="parquet")
+    assert ref.shape == [2, 3]
+    loaded = ref.load(tmp_path)
+    assert loaded.shape == (2, 3)
+    assert np.array_equal(loaded, values)
+    assert loaded.flags.c_contiguous
+
+
+def test_parquet_tensor_refs_share_one_file_by_column(tmp_path: Path) -> None:
+    """Several refs may address different columns of one Parquet file.
+
+    Why: topology and feature artifacts are written by a single streaming DuckDB
+    COPY into one multi-column file. Each logical tensor still needs its own ref,
+    its own dtype check and its own shape, without duplicating the payload.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from ced.acquisition.base import sha256_file
+    from ced.model.schemas import TensorRef
+
+    pq.write_table(
+        pa.table({"head": pa.array([0, 1], pa.int64()), "tail": pa.array([1, 0], pa.int64())}),
+        tmp_path / "topology.parquet",
+        compression="zstd",
+    )
+    digest = sha256_file(tmp_path / "topology.parquet")
+
+    def ref(column: str) -> TensorRef:
+        return TensorRef(
+            path="topology.parquet", column=column, format="parquet", dtype="int64", shape=[2], sha256=digest
+        )
+
+    assert ref("head").load(tmp_path).tolist() == [0, 1]
+    assert ref("tail").load(tmp_path).tolist() == [1, 0]
+    with pytest.raises(ValueError, match="column is missing"):
+        ref("absent").load(tmp_path)
+    with pytest.raises(ValueError, match="dtype mismatch"):
+        ref("head").model_copy(update={"dtype": "float32"}).load(tmp_path)
+    with pytest.raises(ValueError, match="shape mismatch"):
+        ref("head").model_copy(update={"shape": [3]}).load(tmp_path)
+
+
+def test_parquet_tensor_ref_rejects_nulls_and_hash_mismatch(tmp_path: Path) -> None:
+    """A null in a tensor column and a mutated file must both fail loudly.
+
+    Why: nulls have no representation in the index tensors, and decoding them as
+    zeros would invent edges from entity 0. A mutated payload must be caught by the
+    checksum before it reaches training or evaluation.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from ced.acquisition.base import sha256_file
+    from ced.model.schemas import TensorRef
+
+    ref = save_tensor(tmp_path, "ids", np.array([1, 2], dtype=np.int64), format="parquet")
+    assert ref.load(tmp_path).tolist() == [1, 2]
+
+    pq.write_table(pa.table({"value": pa.array([1, None], pa.int64())}), tmp_path / "nulls.parquet", compression="zstd")
+    nulls = TensorRef(
+        path="nulls.parquet",
+        format="parquet",
+        dtype="int64",
+        shape=[2],
+        sha256=sha256_file(tmp_path / "nulls.parquet"),
+    )
+    with pytest.raises(ValueError, match="contains nulls"):
+        nulls.load(tmp_path)
+
+    save_tensor(tmp_path, "ids", np.array([3, 4], dtype=np.int64), format="parquet")
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        ref.load(tmp_path)
+
+
+def test_write_tensor_rejects_unsupported_dtype(tmp_path: Path) -> None:
+    """An unsupported dtype must raise rather than be quietly downcast.
+
+    Why: float64 is the natural dtype of a NumPy computation. Silently storing it as
+    float32 would change feature values; the writer must refuse instead.
+    """
+    from ced.model.tensors import write_tensor
+
+    with pytest.raises(ValueError, match="unsupported tensor dtype"):
+        write_tensor(tmp_path / "bad.parquet", np.array([1.0, 2.0], dtype=np.float64))
+
+
 def test_neighbor_sampler_excludes_heldout_and_schema() -> None:
     from ced.model.batches import sample_neighborhood
 

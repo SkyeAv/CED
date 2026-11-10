@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from ced.config.models import ConfigBase
 from ced.kg.audit import validate_checksums
+from ced.model.tensors import DEFAULT_COLUMN, read_tensor
 
 
 class VocabularyArtifact(ConfigBase):
@@ -52,21 +53,42 @@ class SplitRecord(ConfigBase):
     split: Literal["train", "validation", "test", "schema"]
 
 
+TensorFormat = Literal["npy", "parquet"]
+
+
 class TensorRef(ConfigBase):
+    """One tensor inside a dataset artifact.
+
+    Several refs may address different `column` values of the same Parquet file;
+    the file checksum is then repeated across them, which is harmless because
+    manifest checksums and Modal uploads are both keyed by path.
+    """
+
     path: str
-    format: Literal["npy"] = "npy"
+    column: str = DEFAULT_COLUMN
+    format: TensorFormat = "npy"
     dtype: str = Field(pattern=r"^(int64|float32|bool|int8)$")
     shape: list[int]
     sha256: str
 
     def load(self, root: Path) -> np.ndarray:
+        """Return the tensor as an owned C-contiguous array, validating the file."""
         validate_checksums(root, {self.path: self.sha256})
-        values = np.load(root / self.path, mmap_mode="r", allow_pickle=False)
+        values = self._read(root / self.path)
         if values.dtype != np.dtype(self.dtype) or list(values.shape) != self.shape:
             raise ValueError(f"tensor shape/dtype mismatch: {self.path}")
         if not values.flags.c_contiguous:
             raise ValueError(f"noncontiguous tensor: {self.path}")
         return values
+
+    def _read(self, path: Path) -> np.ndarray:
+        if self.format == "parquet":
+            return read_tensor(path, column=self.column, dtype=self.dtype, shape=self.shape)
+        if self.format == "npy":
+            if not path.is_file():
+                raise FileNotFoundError(f"dataset tensor is missing: {self.path}")
+            return np.load(path, allow_pickle=False)
+        raise ValueError(f"unsupported tensor format: {self.format}")
 
 
 class TextRecord(ConfigBase):

@@ -11,16 +11,27 @@ from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.config.models import RuntimeConfig
 from ced.kg.audit import validate_checksums
 from ced.model.feature_store import prepare_features
-from ced.model.schemas import DatasetManifest, TensorRef, VocabularyArtifact
+from ced.model.schemas import DatasetManifest, TensorFormat, TensorRef, VocabularyArtifact
 from ced.model.shards import write_batch_shards
 from ced.model.split import group_split, statement_group
+from ced.model.tensors import write_tensor
 from ced.preflight import require_cpu_worker, require_disk
 
 
-def save_tensor(root: Path, name: str, values: np.ndarray) -> TensorRef:
-    path = root / f"{name}.npy"
-    np.save(path, np.ascontiguousarray(values), allow_pickle=False)
-    return TensorRef(path=path.name, dtype=str(values.dtype), shape=list(values.shape), sha256=sha256_file(path))
+def save_tensor(root: Path, name: str, values: np.ndarray, *, format: TensorFormat = "npy") -> TensorRef:
+    """Serialize one in-memory tensor and return its manifest reference."""
+    array = np.ascontiguousarray(values)
+    if format == "parquet":
+        path = root / f"{name}.parquet"
+        write_tensor(path, array)
+    elif format == "npy":
+        path = root / f"{name}.npy"
+        np.save(path, array, allow_pickle=False)
+    else:
+        raise ValueError(f"unsupported tensor format: {format}")
+    return TensorRef(
+        path=path.name, format=format, dtype=str(array.dtype), shape=list(array.shape), sha256=sha256_file(path)
+    )
 
 
 def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
