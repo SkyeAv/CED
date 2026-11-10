@@ -1,3 +1,40 @@
 /.python-version
 /.venv/
 /plans/
+/.ced/
+/.tablassert/
+/.env
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.hypothesis/
+.ipynb_checkpoints/
+
+# Packaging and build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+*.whl
+
+# Test and coverage artifacts
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+
+# Virtual environments
+venv/
+env/
+ENV/

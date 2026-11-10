@@ -1,0 +1,26 @@
+schema_version: 1
+name: ced
+enabled: true
+adapter: tablassert
+acquisition:
+  backend: local
+  root: .
+provenance:
+  title: Camurati-Engelmann Disease Family Knowledge Graph
+  description: Curated family and GeneReviews statements with explicit local identifiers for unresolved CED values.
+  homepage: https://github.com/SkyeAv/CED
+  license_name: Source-specific article and chapter terms
+  license_url: https://pmc.ncbi.nlm.nih.gov/articles/PMC2564495/
+  provided_by: infores:ced
+  citations: [PMID:2564495, PMID:20301335, NCBI Bookshelf:NBK1156]
+graph: src/ced/graphs/ced-graph.yaml
+artifacts:
+  - { path: src/ced/graphs/ced-graph.yaml, role: graph }
+  - { path: src/ced/graphs/data/placeholder.tsv, role: placeholder }
+mapping:
+  predicate_overrides: { has_mutation: 'ced:has_mutation' }
+  options:
+    unresolved_namespace: CED
+    family_pattern: '^Family ([0-9]+)$'
+    family_template: 'CED:Family_{1}'
+    unresolved_status: unresolved_local

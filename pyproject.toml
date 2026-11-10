@@ -1,13 +1,31 @@
 [project]
 name = "ced"
 version = "0.1.0"
-description = "Add your description here"
+description = "Extensible biomedical KGX construction and relational graph autoencoders"
 readme = "README.md"
-authors = [
-    { name = "SkyeAv", email = "skye.a.goetz@gmail.com" }
-]
+authors = [{ name = "SkyeAv", email = "skye.a.goetz@gmail.com" }]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+  "cyclopts>=4.0,<5",
+  "duckdb>=1.4,<2",
+  "hf-transfer>=0.1.9",
+  "huggingface-hub>=0.36,<2",
+  "modal>=1.6.3,<2",
+  "numpy>=2.2",
+  "orjson>=3.10",
+  "polars>=1.32",
+  "pyarrow>=21",
+  "pydantic>=2.12,<3",
+  "python-dotenv>=1.1",
+  "pyyaml>=6.0.2",
+  "tablassert==22.3.0",
+  "torch>=2.6",
+  "zstandard>=0.23",
+]
+
+[project.optional-dependencies]
+model = ["torch-geometric>=2.7"]
+text = ["sentence-transformers>=3.0"]
 
 [project.scripts]
 ced = "ced:main"
@@ -18,6 +36,47 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "ipykernel>=7.4.0",
-    "jupyter>=1.1.1",
+  "prek>=0.3",
+  "pyright>=1.1.400",
+  "pytest>=8.4",
+  "ruff>=0.14",
+  "yamllint>=1.38",
 ]
+
+[tool.uv]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+extend-exclude = [".ced", ".venv"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "SIM", "C4", "PT", "RUF", "TID", "UP", "RET", "PIE"]
+
+[tool.pyright]
+include = ["src", "tests"]
+extraPaths = ["tests"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "network: explicit bounded network integration",
+  "gpu: explicit Modal GPU integration",
+  "fullmap: requires the existing wenceslaus fullmap",
+]
+addopts = "-m 'not network and not gpu and not fullmap'"

@@ -1,0 +1,28 @@
+schema_version: 1
+name: drug-approvals
+enabled: true
+adapter: kgx_ndjson
+acquisition:
+  backend: huggingface
+  repo_id: SkyeAv/drug-approvals-kp
+  revision: 88a4406c870ed557ef98c77b2eca1b8cc2584be9
+  fast_transfer: true
+provenance:
+  title: Drug Approvals Knowledge Provider
+  description: Versioned drug-approval KGX nodes and statements.
+  homepage: https://huggingface.co/datasets/SkyeAv/drug-approvals-kp
+  license_name: Apache-2.0
+  license_url: https://www.apache.org/licenses/LICENSE-2.0
+  provided_by: infores:drug-approvals-kp
+artifacts:
+  - path: 1.27.0/DRUG_APPROVALS_KP_1.27.0.nodes.ndjson
+    role: nodes
+    size: 3174127
+  - path: 1.27.0/DRUG_APPROVALS_KP_1.27.0.edges.ndjson
+    role: edges
+    size: 269714718
+    sha256: d4a94750044715c5c3214eac1c2ea490f572b14fd6416a115699d65bc7b8ceee
+  - { path: README.md, role: metadata }
+mapping:
+  options:
+    upstream_conflated: false

@@ -1,2 +1,7 @@
 def main() -> None:
-    print("Hello from ced!")
+    from ced.cli import main as cli_main
+
+    cli_main()
+
+
+__all__ = ["main"]

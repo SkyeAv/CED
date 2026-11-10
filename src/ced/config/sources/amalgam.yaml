@@ -1,0 +1,52 @@
+schema_version: 1
+name: amalgam
+enabled: true
+adapter: amalgam_compact
+acquisition:
+  backend: huggingface
+  repo_id: SkyeAv/amalgam
+  revision: 472e32d3399758f2e50e1cb9350524aa3a9b4f4a
+  fast_transfer: true
+provenance:
+  title: Amalgam
+  description: Canonical int32-reference biomedical metaontology with lossless compact Parquet encoding.
+  homepage: https://huggingface.co/datasets/SkyeAv/amalgam
+  license_name: PolyForm-Noncommercial-1.0.0
+  license_url: https://polyformproject.org/licenses/noncommercial/1.0.0/
+  provided_by: infores:amalgam
+artifacts:
+  - { path: manifest.json, role: inventory }
+  - { path: run_manifest.json, role: run_manifest }
+  - { path: README.md, role: metadata }
+  - { path: graph.yaml, role: metadata }
+  - { path: model.yaml, role: metadata }
+  - { path: ontology.yaml, role: metadata }
+  - { path: predicates.yaml, role: metadata }
+  - { path: sources.yaml, role: metadata }
+  - { path: taxa.yaml, role: metadata }
+  - { path: text.yaml, role: metadata }
+  - { path: transforms.yaml, role: metadata }
+  - { path: LICENSE.md, role: license }
+  - { path: NOTICES.md, role: notices }
+inventory:
+  manifest: manifest.json
+  format: amalgam_compact
+  include: [vertices/, relations/, attributes/, categories/, predicates/, taxa/, conflicts/]
+  roles:
+    vertices/: vertices
+    relations/: relations
+    attributes/: attributes
+    categories/: categories
+    predicates/: predicates
+    taxa/: taxa
+    conflicts/: conflicts
+mapping:
+  predicate_overrides:
+    related-to: biolink:related_to
+    subclass-of: biolink:subclass_of
+    in-taxon: biolink:in_taxon
+    never-in-taxon: RO:0002161
+  schema_relations: [has-category, in-taxon, never-in-taxon]
+  options:
+    uuid_encoding: rfc4122-big-endian-binary16
+    legacy_tsv_forbidden: true

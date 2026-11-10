@@ -1,0 +1,69 @@
+name: ced
+version: 0.1.0
+tables:
+  - ./src/ced/graphs/tables/**/*.yaml
+fullmap: ${CED_FULLMAP:-/home/sgoetz/Desktop/fullmap}
+rig:
+  source_info:
+    infores_id: infores:ced
+    name: Camurati-Engelmann Disease Family Knowledge Graph
+    description: >-
+      Curated family, phenotype, mutation, treatment, and management statements about
+      Camurati-Engelmann disease.
+    citations:
+      - 'Janssens et al., Camurati-Engelmann disease family study, PMID:2564495 and PMC2564495.'
+      - 'Wallace and Wilcox, Camurati-Engelmann Disease, GeneReviews NBK1156, PMID:20301335.'
+    terms_of_use_info:
+      terms_of_use_url: https://pmc.ncbi.nlm.nih.gov/articles/PMC2564495/
+      terms_of_use_description: >-
+        Article, GeneReviews chapter, and underlying source terms remain applicable;
+        no broader redistribution license is claimed.
+    data_access_locations:
+      - https://pmc.ncbi.nlm.nih.gov/articles/PMC2564495/
+      - https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/
+    source_status: maintained_as_needed_updates
+    data_provision_mechanisms: [other]
+    data_formats: [yaml, tsv]
+  ingest_info:
+    utility: >-
+      Preserve richly qualified CED family evidence for knowledge-graph analysis and
+      held-out relational link prediction.
+    scope: >-
+      Curate reported family observations and GeneReviews clinical, molecular, treatment,
+      and management statements without inventing efficacy or negative assertions.
+    relevant_files:
+      - file_name: PMC2564495 family tables
+        location: https://pmc.ncbi.nlm.nih.gov/articles/PMC2564495/
+      - file_name: GeneReviews NBK1156
+        location: https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/
+    included_content:
+      - file_name: PMC2564495 family tables
+        included_records: >-
+          Family phenotypes, mutations, locations, and reported treatment exposure with
+          study sizes and effect annotations.
+      - file_name: GeneReviews NBK1156
+        included_records: >-
+          Clinical, molecular, inheritance, treatment, and management statements with
+          chapter locations and supporting text.
+    filtered_content:
+      - file_name: PMC2564495 family tables
+        filtered_records: >-
+          Unreported or ambiguous table cells are omitted rather than converted into
+          negative assertions.
+        rationale: Missing observations are not evidence of absence and must not become negative edges.
+    ingest_categories: [primary_knowledge_provider, translator_knowledge_creator]
+    additional_notes:
+      - Content categories are edge_content, node_property_content, and edge_property_content.
+      - Modeling categories are spoq_pattern, predicates, qualifiers, edge_properties, and node_properties.
+      - >-
+        Non-Biolink predicates and unresolved local CED identifiers are preserved explicitly in the
+        extended canonical output.
+  provenance_info:
+    contributions:
+      - SkyeAv - scientific table curation and graph configuration
+      - Tablassert - fullmap entity resolution, KGX serialization, and RIG generation
+    artifacts:
+      - https://github.com/SkyeAv/CED
+  artifact_base_url: file://.ced/kg/ced
+  artifact_base_path: .ced/kg/ced
+uuid_domain: CED
