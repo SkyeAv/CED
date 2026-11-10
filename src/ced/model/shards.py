@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from ced.config.models import RuntimeConfig
-from ced.model.batches import sample_neighborhood
+from ced.model.batches import TrainAdjacency, sample_neighborhood
 from ced.model.disk_graph import DiskGraph
 from ced.model.negatives import negative_context, sample_negatives, typed_pools
 from ced.model.schemas import GraphBatch, NegativeBatch, TrainingExample
@@ -28,6 +28,9 @@ def write_batch_shards(
     chunk_size = max(1, runtime.batch.node_limit // (2 * (runtime.split.negatives + 1)))
     disk: DiskGraph | None = None
     pools = typed_pools(edges, relations, splits, types) if in_memory else None
+    # Built once for all chunks: the historical per-call full-edge mask scan was
+    # the dominant prepare cost on large graphs.
+    adjacency = TrainAdjacency(edges, splits) if in_memory else None
     # Encoded once for all chunks: repeated per-chunk negative sampling must not
     # re-walk every positive statement in Python.
     context = negative_context(edges[0], relations, edges[1]) if in_memory else None
@@ -55,6 +58,7 @@ def write_batch_shards(
                 )
             seeds = np.unique(np.concatenate((edges[:, positive].ravel(), head[valid], tail[valid])))
             if in_memory:
+                assert adjacency is not None
                 neighborhood = sample_neighborhood(
                     edges,
                     relations,
@@ -64,6 +68,7 @@ def write_batch_shards(
                     seed=runtime.split.seed + start,
                     node_limit=runtime.batch.node_limit,
                     edge_types=edge_types,
+                    adjacency=adjacency,
                 )
             else:
                 assert disk is not None

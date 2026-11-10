@@ -44,7 +44,7 @@ def test_perf_typed_pools_and_negatives() -> None:
 
 
 def test_perf_neighborhood() -> None:
-    from ced.model.batches import sample_neighborhood
+    from ced.model.batches import TrainAdjacency, sample_neighborhood
 
     graph = synthetic_graph(nodes=5000, edges=50000, relations=8, type_sets=4, seed=2)
     edges, relations, splits = graph["edge_index"], graph["relation_id"], graph["split"]
@@ -57,6 +57,23 @@ def test_perf_neighborhood() -> None:
         iterations=3,
     )
     write_record("sample_neighborhood", seconds=seconds, iterations=3, workload=workload)
+    # Production chunking builds the CSR once and reuses it per chunk.
+    adjacency = TrainAdjacency(edges, splits)
+    shared_seconds = timed(
+        lambda: sample_neighborhood(
+            edges,
+            relations,
+            splits,
+            seeds,
+            fanout=[15, 10],
+            seed=7,
+            node_limit=4096,
+            edge_types=graph["edge_type_id"],
+            adjacency=adjacency,
+        ),
+        iterations=3,
+    )
+    write_record("sample_neighborhood_shared_adjacency", seconds=shared_seconds, iterations=3, workload=workload)
 
 
 def test_perf_encoder_forward() -> None:
