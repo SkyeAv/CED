@@ -22,6 +22,7 @@ from ced.acquisition.base import sha256_file
 from ced.config.models import RuntimeConfig, SplitSettings
 from ced.kg.audit import validate_checksums
 from ced.kg.writer import ATTRIBUTE_SCHEMA, NODE_SCHEMA, STATEMENT_SCHEMA
+from ced.model.encoding import encode_dataset_text
 from ced.model.feature_index import FeatureIndex
 from ced.model.prepare import prepare_dataset
 from ced.model.schemas import TensorRef
@@ -340,3 +341,45 @@ def test_prepare_dataset_emits_ordered_feature_store(tmp_path: Path, monkeypatch
     assert len(values) == 1
     assert fields.shape == rows.shape
     assert index.numeric_rows(torch.tensor([0], dtype=torch.long))[0].tolist() == [0]
+
+
+def test_encode_dataset_text_resolves_every_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """encode-text resolves every text feature through the append-only cache.
+
+    Why: the rewrite moved missing-text resolution from a Python dict into a DuckDB
+    anti-join on sha256(text). If that digest disagreed with Python's text_key, or
+    the join dropped rows, text features would vanish from the dataset silently and
+    the model would train on zeros.
+    """
+    _, dataset, _runtime = prepare(tmp_path, monkeypatch)
+    monkeypatch.setattr("ced.model.encoding.require_cpu_worker", lambda config: None)
+    runtime = RuntimeConfig.model_validate(
+        {
+            "remote_project": str(tmp_path),
+            "artifact_root": str(tmp_path / "artifacts"),
+            "cpu_workers": 4,
+            "memory_limit": "4GB",
+            "disk_reserve_gb": 0.5,
+            "text_encoding": {"provider": "random", "dimension": 8, "batch_size": 2},
+        }
+    )
+
+    store = encode_dataset_text(runtime, dataset.name)
+    assert store.rows == 1
+    assert store.dimension == 8
+    index = pq.read_table(Path(store.index_path))
+    assert index.num_rows == 1
+    assert index.column("row").to_pylist() == [0]
+    assert index.column("role").to_pylist() == ["statement"]
+    assert len(store.parts) == 1
+    assert store.parts[0].load(tmp_path).shape == (1, 8)
+    parts_before = [reference.path for reference in store.parts]
+    digest_before = sha256_file(Path(store.index_path))
+
+    # A second run encodes nothing new: no extra parts and a byte-identical index.
+    again = encode_dataset_text(runtime, dataset.name)
+    assert again.rows == store.rows
+    assert [reference.path for reference in again.parts] == parts_before
+    assert sha256_file(Path(again.index_path)) == digest_before
+    assert not (dataset / "text-records.partial.parquet").exists()
+    assert not (dataset / "text-missing.partial.parquet").exists()

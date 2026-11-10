@@ -117,7 +117,7 @@ class DenseFeatureStore(ConfigBase):
     dimension: int = Field(gt=0)
     rows: int = Field(ge=0)
     index_path: str
-    tensor: TensorRef
+    parts: list[TensorRef] = Field(default_factory=list)
     checksums: dict[str, str] = Field(default_factory=dict)
 
 

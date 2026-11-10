@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import duckdb
 import numpy as np
@@ -17,7 +17,10 @@ from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.config.models import RuntimeConfig, TextEncodingSettings
 from ced.kg.audit import validate_checksums
 from ced.model.schemas import DenseFeatureStore, TensorRef
+from ced.model.tensors import write_tensor
 from ced.preflight import require_cpu_worker
+
+PART_ROWS = 65_536
 
 
 class TextEncoder(Protocol):
@@ -90,78 +93,129 @@ def encoder_key(settings: TextEncodingSettings) -> str:
 
 
 class TextEmbeddingCache:
-    """Persistent content-addressed dense-text store with bounded streaming updates."""
+    """Append-only content-addressed dense-text store.
+
+    Embeddings live in immutable Parquet parts and the sha -> row index in
+    matching index parts. Appending N texts writes O(N) bytes; the previous
+    single-array design rewrote every existing row on every run, which is
+    O(total) per call and O(total^2) across incremental runs.
+    """
 
     def __init__(self, root: Path, settings: TextEncodingSettings) -> None:
         self.root = root / encoder_key(settings)
         self.settings = settings
         self.manifest_path = self.root / "manifest.json"
-        self.index_path = self.root / "text-index.parquet"
-        self.embedding_path = self.root / "embeddings.npy"
-        self.root.mkdir(parents=True, exist_ok=True)
+        self.parts = self.root / "parts"
+        self.index = self.root / "index"
+        self.parts.mkdir(parents=True, exist_ok=True)
+        self.index.mkdir(parents=True, exist_ok=True)
 
-    def load_entries(self) -> dict[str, int]:
-        if not self.index_path.exists():
-            return {}
-        table = pq.read_table(self.index_path, columns=["text_sha256", "row"])
-        return dict(zip(table["text_sha256"].to_pylist(), table["row"].to_pylist(), strict=True))
-
-    def embed(self, texts: Sequence[str], encoder: TextEncoder) -> tuple[np.ndarray, dict[str, int]]:
-        entries = self.load_entries()
-        missing: dict[str, str] = {}
-        for text in texts:
-            digest = text_key(text)
-            if digest not in entries:
-                missing.setdefault(digest, text)
-        if not missing:
-            return np.array([entries[text_key(text)] for text in texts], dtype=np.int64), entries
-        if self.embedding_path.exists():
-            previous = np.load(self.embedding_path, mmap_mode="r", allow_pickle=False)
-        else:
-            previous = np.zeros((0, encoder.dimension), dtype=np.float32)
-        total = int(previous.shape[0]) + len(missing)
-        embeddings = np.lib.format.open_memmap(
-            self.root / "embeddings.partial.npy", mode="w+", dtype="float32", shape=(total, encoder.dimension)
-        )
-        embeddings[: int(previous.shape[0])] = previous[:]
-        position = int(previous.shape[0])
-        batch: list[str] = []
-        keys: list[str] = []
-        for digest, text in missing.items():
-            batch.append(text)
-            keys.append(digest)
-            if len(batch) >= self.settings.batch_size:
-                embeddings[position : position + len(batch)] = encoder.encode(batch).detach().cpu().numpy()
-                for offset, key in enumerate(keys):
-                    entries[key] = position + offset
-                position += len(batch)
-                batch, keys = [], []
-        if batch:
-            embeddings[position : position + len(batch)] = encoder.encode(batch).detach().cpu().numpy()
-            for offset, key in enumerate(keys):
-                entries[key] = position + offset
-        embeddings.flush()
-        del previous, embeddings
-        atomic_write_json(
-            self.manifest_path,
-            {
+    def manifest(self) -> dict[str, Any]:
+        """Return the cache manifest, or an empty one for a cache with no parts yet."""
+        if not self.manifest_path.is_file():
+            return {
                 "provider": self.settings.provider,
                 "model": self.settings.model,
-                "dimension": encoder.dimension,
-                "rows": total,
+                "dimension": self.settings.dimension,
+                "rows": 0,
                 "normalize": self.settings.normalize,
-            },
-        )
-        pq.write_table(
-            pa.table(
-                {"text_sha256": list(entries), "row": [entries[key] for key in entries]},
-                schema=pa.schema([("text_sha256", pa.string()), ("row", pa.int64())]),
-            ),
-            self.index_path,
-            compression="zstd",
-        )
-        (self.root / "embeddings.partial.npy").replace(self.embedding_path)
-        return np.array([entries[text_key(text)] for text in texts], dtype=np.int64), entries
+                "parts": [],
+            }
+        return json.loads(self.manifest_path.read_text())
+
+    def create_index(self, connection: duckdb.DuckDBPyConnection) -> None:
+        """Expose the sha -> row map as a temp table without loading it into Python.
+
+        DuckDB cannot glob an empty directory, so a brand-new cache gets an empty
+        typed table instead of a failing `read_parquet` call.
+        """
+        if any(self.index.glob("*.parquet")):
+            connection.execute(
+                f"""CREATE OR REPLACE TEMP TABLE cache_index AS
+                    SELECT text_sha256, min(row) AS row
+                    FROM read_parquet('{self.index / "*.parquet"}') GROUP BY text_sha256"""
+            )
+        else:
+            connection.execute("CREATE OR REPLACE TEMP TABLE cache_index (text_sha256 VARCHAR, row BIGINT)")
+
+    def append_stream(self, batches: Iterator[tuple[Sequence[str], Any]]) -> int:
+        """Append encoded batches as new parts and return the number of rows added.
+
+        Only the current batch and the part being filled are resident, so peak RSS
+        is bounded by PART_ROWS * dimension regardless of dataset size.
+        """
+        manifest = self.manifest()
+        dimension = int(manifest["dimension"])
+        row = int(manifest["rows"])
+        parts = list(manifest["parts"])
+        pending_keys: list[str] = []
+        pending: list[np.ndarray] = []
+        pending_rows = 0
+        added = 0
+
+        def flush() -> None:
+            nonlocal row, pending_keys, pending, pending_rows
+            if not pending_rows:
+                return
+            name = f"part-{len(parts):06d}.parquet"
+            vectors = np.concatenate(pending) if len(pending) > 1 else pending[0]
+            write_tensor(self.parts / name, vectors)
+            pq.write_table(
+                pa.table(
+                    {
+                        "text_sha256": pa.array(pending_keys, pa.string()),
+                        "row": pa.array(np.arange(row, row + pending_rows, dtype=np.int64)),
+                    }
+                ),
+                self.index / name,
+                compression="zstd",
+            )
+            parts.append({"name": name, "rows": pending_rows})
+            row += pending_rows
+            pending_keys, pending, pending_rows = [], [], 0
+
+        for texts, values in batches:
+            array = np.ascontiguousarray(values, dtype=np.float32)
+            if array.ndim != 2 or array.shape[0] != len(texts) or array.shape[1] != dimension:
+                raise ValueError(f"encoded batch shape {array.shape} does not match cache dimension {dimension}")
+            pending_keys.extend(text_key(text) for text in texts)
+            pending.append(array)
+            pending_rows += array.shape[0]
+            added += array.shape[0]
+            if pending_rows >= PART_ROWS:
+                flush()
+        flush()
+        if added:
+            atomic_write_json(self.manifest_path, {**manifest, "dimension": dimension, "rows": row, "parts": parts})
+        return added
+
+    def part_refs(self) -> list[TensorRef]:
+        """One TensorRef per immutable part, in row order."""
+        manifest = self.manifest()
+        dimension = int(manifest["dimension"])
+        references = []
+        for part in manifest["parts"]:
+            path = self.parts / str(part["name"])
+            references.append(
+                TensorRef(
+                    path=str(path),
+                    column="value",
+                    format="parquet",
+                    dtype="float32",
+                    shape=[int(part["rows"]), dimension],
+                    sha256=sha256_file(path),
+                )
+            )
+        return references
+
+
+def _encode_batches(path: Path, encoder: TextEncoder, batch_size: int) -> Iterator[tuple[list[str], np.ndarray]]:
+    """Stream the texts that still need encoding in bounded batches."""
+    if not path.is_file():
+        return
+    for batch in pq.ParquetFile(path).iter_batches(batch_size=batch_size, columns=["text"]):
+        texts = batch.column("text").to_pylist()
+        yield texts, encoder.encode(texts).detach().cpu().numpy()
 
 
 def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureStore:
@@ -191,26 +245,43 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
         query = common.format(f"{node_query} UNION ALL BY NAME {statement_query}")
         partial = root / "text-records.partial.parquet"
         connection.execute(f"COPY ({query}) TO '{partial}' (FORMAT PARQUET, COMPRESSION ZSTD)")
-        texts = pq.read_table(partial, columns=["text"])["text"].to_pylist()
-        rows, _ = cache.embed(texts, encoder)
-        records = pq.read_table(partial).append_column("row", pa.array(rows.tolist(), pa.int64()))
+
+        cache.create_index(connection)
+        missing = root / "text-missing.partial.parquet"
+        connection.execute(
+            f"""COPY (SELECT DISTINCT sha256(r.text) AS text_sha256, r.text
+                      FROM read_parquet('{partial}') r
+                      WHERE NOT EXISTS (SELECT 1 FROM cache_index c WHERE c.text_sha256 = sha256(r.text))
+                      ORDER BY text_sha256)
+                TO '{missing}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
+        )
+        cache.append_stream(_encode_batches(missing, encoder, settings.batch_size))
+        missing.unlink()
+        # Refresh the temp table: the append wrote a new index part that the table
+        # built for the anti-join above does not contain.
+        cache.create_index(connection)
+
         index_path = root / "text-index.parquet"
-        pq.write_table(records, index_path, compression="zstd")
+        connection.execute(
+            f"""COPY (SELECT r.owner_index, r.field_id, r.ordinal, r.role, r.language, r.text, c.row
+                      FROM read_parquet('{partial}') r
+                      JOIN cache_index c ON c.text_sha256 = sha256(r.text)
+                      ORDER BY r.owner_index, r.field_id, r.ordinal)
+                TO '{index_path}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
+        )
+        records = pq.ParquetFile(partial).metadata.num_rows
+        resolved = pq.ParquetFile(index_path).metadata.num_rows
+        if resolved != records:
+            raise ValueError(f"{records - resolved} text records did not resolve to a cached embedding")
         partial.unlink()
-        embeddings = np.load(cache.embedding_path, mmap_mode="r", allow_pickle=False)
         store = DenseFeatureStore(
             provider=settings.provider,
             model=settings.model,
             encoder_key=encoder_key(settings),
             dimension=encoder.dimension,
-            rows=records.num_rows,
+            rows=resolved,
             index_path=str(index_path),
-            tensor=TensorRef(
-                path=str(cache.embedding_path),
-                dtype="float32",
-                shape=list(embeddings.shape),
-                sha256=sha256_file(cache.embedding_path),
-            ),
+            parts=cache.part_refs(),
         )
         atomic_write_json(root / "text-features.json", store.model_dump(mode="json"))
         return store

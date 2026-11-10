@@ -339,21 +339,66 @@ def test_random_text_encoder_is_deterministic_and_normalized() -> None:
     assert torch.allclose(first.norm(dim=-1), torch.ones(2))
 
 
-def test_text_embedding_cache_reuses_and_appends(tmp_path: Path) -> None:
+def test_text_embedding_cache_appends_parts_without_rewriting(tmp_path: Path) -> None:
+    """Appending writes only new parts and never reassigns an existing row id.
+
+    Why: the previous single-array cache rewrote every stored vector on every run,
+    so incremental encoding cost O(total) per call and O(total^2) overall. A
+    renumbered row would also silently point datasets that already reference
+    text-index.parquet at the wrong embedding.
+    """
     pytest.importorskip("torch")
+    import duckdb
+
+    from ced.acquisition.base import sha256_file
     from ced.config.models import TextEncodingSettings
     from ced.model.encoding import RandomTextEncoder, TextEmbeddingCache, text_key
 
     settings = TextEncodingSettings(provider="random", dimension=4, batch_size=2)
     encoder = RandomTextEncoder(4, seed=11)
     cache = TextEmbeddingCache(tmp_path, settings)
-    rows, entries = cache.embed(["one", "two"], encoder)
-    assert len(set(entries)) == 2
-    assert rows.tolist() == [entries[text_key("one")], entries[text_key("two")]]
-    rows2, entries2 = cache.embed(["one", "three"], encoder)
-    assert rows2[0] == rows[0]
-    assert entries2[text_key("one")] == entries[text_key("one")]
-    assert len(entries2) == 3
+
+    def batches(texts: list[str]):
+        return iter([(texts, encoder.encode(texts).detach().cpu().numpy())])
+
+    assert cache.append_stream(batches(["one", "two"])) == 2
+    first_parts = {path.name: sha256_file(path) for path in sorted(cache.parts.glob("*.parquet"))}
+    assert cache.append_stream(batches(["three"])) == 1
+
+    second_parts = {path.name: sha256_file(path) for path in sorted(cache.parts.glob("*.parquet"))}
+    assert first_parts == {name: second_parts[name] for name in first_parts}
+    assert len(second_parts) == len(first_parts) + 1
+    assert cache.manifest()["rows"] == 3
+
+    connection = duckdb.connect()
+    try:
+        cache.create_index(connection)
+        rows = dict(connection.execute("SELECT text_sha256, row FROM cache_index").fetchall())
+    finally:
+        connection.close()
+    assert rows == {text_key("one"): 0, text_key("two"): 1, text_key("three"): 2}
+
+    references = cache.part_refs()
+    assert [reference.shape for reference in references] == [[2, 4], [1, 4]]
+    loaded = references[1].load(tmp_path)
+    assert loaded.shape == (1, 4)
+    assert np.isfinite(loaded).all()
+
+
+def test_text_embedding_cache_rejects_wrong_dimension(tmp_path: Path) -> None:
+    """A batch whose width disagrees with the cache dimension must raise.
+
+    Why: writing a mis-shaped batch would corrupt every later row offset in the
+    part, and the damage would only surface as garbage embeddings much later.
+    """
+    pytest.importorskip("torch")
+    from ced.config.models import TextEncodingSettings
+    from ced.model.encoding import TextEmbeddingCache
+
+    settings = TextEncodingSettings(provider="random", dimension=4, batch_size=2)
+    cache = TextEmbeddingCache(tmp_path, settings)
+    with pytest.raises(ValueError, match="does not match cache dimension"):
+        cache.append_stream(iter([(["one"], np.zeros((1, 8), dtype=np.float32))]))
 
 
 def test_sentence_transformer_encoder_uses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
