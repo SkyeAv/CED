@@ -1,0 +1,2869 @@
+# Curated from Wallace and Wilcox, GeneReviews NBK1156, last updated 2023-08-31.
+# Source quotations, chapter locations, and underlying citations are retained per section.
+template:
+  source:
+    kind: text
+    local: ./src/ced/graphs/data/placeholder.tsv
+    url: https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/
+    delimiter: /t
+  statement:
+    subject:
+      method: value
+      taxon_from: species_context_qualifier
+    object:
+      method: value
+      taxon_from: species_context_qualifier
+    qualifiers:
+      - qualifier: species_context_qualifier
+        method: value
+        encoding: homo sapiens
+        prioritize:
+          - OrganismTaxon
+  provenance:
+    repo: PMID
+    publication: '20301335'
+    knowledge_level: knowledge_assertion
+    agent_type: manual_agent
+  annotations:
+    - annotation: update_date
+      method: value
+      encoding: '2023-08-31'
+
+sections:
+  # Quantified disease-phenotype findings.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_frequenc'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: proximal muscle weakness, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Table 2: "Proximal muscle weakness | 62%-67%." Also listed
+          under Suggestive Findings. Musculoskeletal description: "Decreased muscle mass and weakness are most apparent
+          in the proximal lower limbs, resulting in difficulty when rising from a sitting position." Table 2 sources:
+          Wallace et al 2004 (PMID:15326622); Carlson et al 2010 (PMID:20566907); Li et al 2022 (PMID:34490910); Liang
+          et al 2022 (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_frequenc'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: waddling gait, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Table 2: "Wide-based, waddling gait | 48%-79%." Clinical
+          Description: "A wide-based, waddling gait is common." Table 2 sources: Wallace et al 2004 (PMID:15326622);
+          Carlson et al 2010 (PMID:20566907); Li et al 2022 (PMID:34490910); Liang et al 2022 (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_frequenc'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: easy fatigability, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Table 2: "Easy fatigability | 54%." Also listed under
+          Suggestive Findings. Table 2 sources: Wallace et al 2004 (PMID:15326622); Carlson et al 2010 (PMID:20566907);
+          Li et al 2022 (PMID:34490910); Liang et al 2022 (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_frequenc'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Table 2: "Bone pain | 68%-100%." The Summary also lists limb
+          pain. Suggestive Findings specifies "Bone pain primarily affecting the lower extremities." Clinical
+          Description: "The pain is described as constant, aching, and most intense in the lower limbs. Pain often
+          increases with activity, stress, and cold weather. Many individuals have intermittent episodes of severe pain
+          and incapacitation." Severity ranges from mild to severe and may decrease in adulthood. Sources: Wallace et al
+          2004 (PMID:15326622); Carlson et al 2010 (PMID:20566907); Li et al 2022 (PMID:34490910); Liang et al 2022
+          (PMID:36339419); Janssens et al 2006 (PMID:15894597); Yuldashev et al 2017 (PMID:28261436); Hughes et al 2019
+          (PMID:30690794).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_frequenc'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hearing loss, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Table 2: "Hearing loss | 19%-54% | Sensorineural &/or
+          conductive." Sources: Wallace et al 2004 (PMID:15326622); Carlson et al 2010 (PMID:20566907); Li et al 2022
+          (PMID:34490910); Liang et al 2022 (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_frequenc'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: headache, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Table 2: "Headaches | 25%." Neurologic description: "Calvarial
+          hyperostosis can lead to increased intracranial pressure, chronic headaches that can be severe, and frontal
+          bossing." Table 2 sources: Wallace et al 2004 (PMID:15326622); Carlson et al 2010 (PMID:20566907); Li et al
+          2022 (PMID:34490910); Liang et al 2022 (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: joint contracture, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Joint contractures occur in 43% of
+          individuals." The Summary also lists joint contractures as a characteristic finding.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: bone tenderness, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "The enlarged bone shafts can also be palpable
+          and tender on examination; 52% of affected individuals report bone tenderness with palpation." Source: Wallace
+          et al 2004 (PMID:15326622).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: cranial nerve deficit, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Cranial nerve deficits occur in 38% of affected
+          individuals. The most common deficits are hearing loss, vision problems, and facial paralysis."
+
+  # Radiographic and structural findings.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: long bone
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis: "Hyperostosis of one or more of the long bones begins with
+          the diaphyses and can progress to the metaphyses and rarely involves the epiphyses." It is usually symmetric
+          in the appendicular skeleton but can be asymmetric. The Summary identifies long-bone hyperostosis as
+          characteristic.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: cortical thickening, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: diaphysis
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, long bones: "Periosteal involvement results in uneven
+          cortical thickening and increased bone diameter." Hyperostosis begins in the diaphyses.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: increased bone diameter, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: long bone
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, long bones: "Periosteal involvement results in uneven
+          cortical thickening and increased bone diameter."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: endosteal bony sclerosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: long bone
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, long bones: "Endosteal bony sclerosis can lead to a
+          narrowed medullary canal."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: narrowed medullary canal, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: long bone
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, long bones: "Endosteal bony sclerosis can lead to a
+          narrowed medullary canal." Clinical Characteristics also describes anemia as hypothesized to be caused by a
+          narrowed medullary cavity.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: skull
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Summary: CED is characterized by "hyperostosis of the long bones and the skull." Clinical
+          Characteristics, Neurologic: "Calvarial hyperostosis can lead to increased intracranial pressure, chronic
+          headaches that can be severe, and frontal bossing."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: skull base
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, skull: "Hyperostosis begins at the base of the anterior
+          and middle fossae and often includes the frontal bone." Source: Wallace et al 2004 (PMID:15326622).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: anterior cranial fossa
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, skull: "Hyperostosis begins at the base of the anterior
+          and middle fossae and often includes the frontal bone." Source: Wallace et al 2004 (PMID:15326622).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: middle cranial fossa
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, skull: "Hyperostosis begins at the base of the anterior
+          and middle fossae and often includes the frontal bone." Source: Wallace et al 2004 (PMID:15326622).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: frontal bone
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, skull: "Hyperostosis begins at the base of the anterior
+          and middle fossae and often includes the frontal bone." Source: Wallace et al 2004 (PMID:15326622).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: osteosclerosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: skull base
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypopituitarism has been attributed
+          to skull base osteosclerosis resulting in a small sella and/or pituitary compression due to intracranial
+          hypertension." Source: Das et al 2021 (PMID:35415221).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: osteosclerosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: posterior neural arch
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, other: "Mild osteosclerosis is present in the posterior
+          neural arch of the spine and parts of the flat bones that correspond to the diaphysis."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Diagnosis_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: osteosclerosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: flat bone
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Diagnosis, Clinical Diagnosis, other: "Mild osteosclerosis is present in the posterior
+          neural arch of the spine and parts of the flat bones that correspond to the diaphysis."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: sclerosis of cranial nerve foramina, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Sclerosis of the cranial nerve foramina can lead
+          to direct nerve compression or neurovascular compromise."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: narrowing of the external auditory meatus, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Conductive loss can be caused by narrowing of the
+          external auditory meatus, bony encroachment of the ossicles, or narrowing of the oval and round windows."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: narrowing of the oval window, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Conductive loss can be caused by narrowing of the
+          external auditory meatus, bony encroachment of the ossicles, or narrowing of the oval and round windows."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: narrowing of the round window, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Conductive loss can be caused by narrowing of the
+          external auditory meatus, bony encroachment of the ossicles, or narrowing of the oval and round windows."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: narrowing of the internal auditory canal, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Sensorineural hearing loss is caused by narrowing
+          of the internal auditory canal and compression of the cochlear nerve and/or vasculature." Table 5 also
+          identifies narrowed internal auditory canal as a general contraindication for cochlear implants.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: bony encroachment of the ossicles, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Conductive loss can be caused by narrowing of the
+          external auditory meatus, bony encroachment of the ossicles, or narrowing of the oval and round windows."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: small sella, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypopituitarism has been attributed
+          to skull base osteosclerosis resulting in a small sella and/or pituitary compression due to intracranial
+          hypertension." This is an attributed mechanism, not a universal finding. Source: Das et al 2021
+          (PMID:35415221).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: pituitary compression, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypopituitarism has been attributed
+          to skull base osteosclerosis resulting in a small sella and/or pituitary compression due to intracranial
+          hypertension." This is an attributed mechanism, not a universal finding. Source: Das et al 2021
+          (PMID:35415221).
+
+  # Musculoskeletal and general findings.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: poor muscular development, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Clinical Description: "Individuals with Camurati-Engelmann
+          disease (CED) present with proximal muscle weakness, poor muscular development, a wide-based, waddling gait,
+          easy fatigability, bone pain, and headaches."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: decreased muscle mass, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Decreased muscle mass and weakness are most
+          apparent in the proximal lower limbs, resulting in difficulty when rising from a sitting position." Marfanoid
+          habitus can also include reduction of muscle mass. Sources: Wallace et al 2004 (PMID:15326622); Janssens et al
+          2006 (PMID:15894597); Van Hul et al 2019 (PMID:30721323).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: difficulty rising from a sitting position, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Decreased muscle mass and weakness are most
+          apparent in the proximal lower limbs, resulting in difficulty when rising from a sitting position."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: delayed onset of walking, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Delayed onset of walking has been reported."
+          Sources: Kim et al 2018 (PMID:29620655); Mwasamwaja et al 2018 (PMID:30034812).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: limited ambulation, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Bone pain has resulted in limited ambulation
+          in some individuals." Management surveillance also includes mobility issues.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: Marfanoid body habitus, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Marfanoid body habitus is described in some
+          affected individuals, with reduction of muscle mass and subcutaneous tissue resulting in low body mass index
+          in some individuals." Sources: Wallace et al 2004 (PMID:15326622); Janssens et al 2006 (PMID:15894597); Van
+          Hul et al 2019 (PMID:30721323).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: reduced subcutaneous tissue, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Marfanoid body habitus is described in some
+          affected individuals, with reduction of muscle mass and subcutaneous tissue resulting in low body mass index
+          in some individuals." Sources: Wallace et al 2004 (PMID:15326622); Janssens et al 2006 (PMID:15894597); Van
+          Hul et al 2019 (PMID:30721323).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: reduced adipose tissue, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypogonadism and lack of pubertal
+          development has also been attributed to reduced adipose tissue and/or direct effects of TGFB1 on the gonads."
+          The attribution is retained rather than asserted as a proven mechanism. Source: Das et al 2021
+          (PMID:35415221).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: low body mass index, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Marfanoid body habitus is described in some
+          affected individuals, with reduction of muscle mass and subcutaneous tissue resulting in low body mass index
+          in some individuals." Sources: Wallace et al 2004 (PMID:15326622); Janssens et al 2006 (PMID:15894597); Van
+          Hul et al 2019 (PMID:30721323).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: lumbar lordosis, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Musculoskeletal involvement can lead to
+          varying degrees of lumbar lordosis, kyphosis, scoliosis, coxa valga, radial head dislocation, genu valgum,
+          hallux valgus, and flat feet." Source: Yuldashev et al 2017 (PMID:28261436).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: kyphosis, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Musculoskeletal involvement can lead to
+          varying degrees of lumbar lordosis, kyphosis, scoliosis, coxa valga, radial head dislocation, genu valgum,
+          hallux valgus, and flat feet." Source: Yuldashev et al 2017 (PMID:28261436).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: scoliosis, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Musculoskeletal involvement can lead to
+          varying degrees of lumbar lordosis, kyphosis, scoliosis, coxa valga, radial head dislocation, genu valgum,
+          hallux valgus, and flat feet." Source: Yuldashev et al 2017 (PMID:28261436).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: coxa valga, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Musculoskeletal involvement can lead to
+          varying degrees of lumbar lordosis, kyphosis, scoliosis, coxa valga, radial head dislocation, genu valgum,
+          hallux valgus, and flat feet." Source: Yuldashev et al 2017 (PMID:28261436).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: radial head dislocation, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Musculoskeletal involvement can lead to
+          varying degrees of lumbar lordosis, kyphosis, scoliosis, coxa valga, radial head dislocation, genu valgum,
+          hallux valgus, and flat feet." Source: Yuldashev et al 2017 (PMID:28261436).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: genu valgum, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Musculoskeletal involvement can lead to
+          varying degrees of lumbar lordosis, kyphosis, scoliosis, coxa valga, radial head dislocation, genu valgum,
+          hallux valgus, and flat feet." Source: Yuldashev et al 2017 (PMID:28261436).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hallux valgus, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Musculoskeletal involvement can lead to
+          varying degrees of lumbar lordosis, kyphosis, scoliosis, coxa valga, radial head dislocation, genu valgum,
+          hallux valgus, and flat feet." Source: Yuldashev et al 2017 (PMID:28261436).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: pes planus, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Musculoskeletal involvement can lead to
+          varying degrees of lumbar lordosis, kyphosis, scoliosis, coxa valga, radial head dislocation, genu valgum,
+          hallux valgus, and flat feet." The normalized object `pes planus` represents the source term "flat feet."
+          Source: Yuldashev et al 2017 (PMID:28261436).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: intermittent limb swelling, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Intermittent limb swelling, erythema, and
+          warmth also occur."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: erythema, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: limb
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Intermittent limb swelling, erythema, and
+          warmth also occur."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: limb warmth, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Intermittent limb swelling, erythema, and
+          warmth also occur."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: bone mineral density, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: object_direction_qualifier
+          method: value
+          encoding: increased
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: hip
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Although bone mineral density measured at the
+          hip and femoral neck are increased in individuals with CED, bone strength measured by bone impact
+          microindentation in three sibs with CED was below normal." Source: Herrera et al 2017 (PMID:28842728).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: bone mineral density, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: object_direction_qualifier
+          method: value
+          encoding: increased
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: femoral neck
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Although bone mineral density measured at the
+          hip and femoral neck are increased in individuals with CED, bone strength measured by bone impact
+          microindentation in three sibs with CED was below normal." Source: Herrera et al 2017 (PMID:28842728).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: delayed fracture healing, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Healing of fractures, when they occur, may be
+          delayed." Increased susceptibility to fracture has not been reported and is not encoded as a positive finding.
+          Source: Wallace et al 2004 (PMID:15326622).
+
+  # Neurologic, hearing, ocular, and facial findings.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: conductive hearing loss, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Approximately 19%-54% of individuals with CED have
+          conductive and/or sensorineural hearing loss." "Conductive loss can be caused by narrowing of the external
+          auditory meatus, bony encroachment of the ossicles, or narrowing of the oval and round windows." Sources:
+          Carlson et al 2010 (PMID:20566907); Liang et al 2022 (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: sensorineural hearing loss, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Approximately 19%-54% of individuals with CED have
+          conductive and/or sensorineural hearing loss." "Sensorineural hearing loss is caused by narrowing of the
+          internal auditory canal and compression of the cochlear nerve and/or vasculature." It can also occur with
+          attempted facial-nerve decompression. Sources: Carlson et al 2010 (PMID:20566907); Liang et al 2022
+          (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: vestibulopathy, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Vestibulopathy including tinnitus and vertigo have
+          also been reported in several individuals." Sources: Carlson et al 2010 (PMID:20566907); Kim et al 2018
+          (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: tinnitus, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Vestibulopathy including tinnitus and vertigo have
+          also been reported in several individuals." Sources: Carlson et al 2010 (PMID:20566907); Kim et al 2018
+          (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: vertigo, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Vestibulopathy including tinnitus and vertigo have
+          also been reported in several individuals." Sources: Carlson et al 2010 (PMID:20566907); Kim et al 2018
+          (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: serous otitis, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Bilateral myringotomy can improve conductive hearing loss resulting
+          from serous otitis in persons w/CED."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: vision problems, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "The most common deficits are hearing loss, vision
+          problems, and facial paralysis."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: blurred vision, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Involvement of the orbit has led to blurred
+          vision, proptosis, papilledema, epiphora, glaucoma, subluxation of the globe, and retinal detachment."
+          Sources: Carlson et al 2010 (PMID:20566907); Popiela & Austin 2015 (PMID:26286906); Kim et al 2018
+          (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: proptosis, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Involvement of the orbit has led to blurred
+          vision, proptosis, papilledema, epiphora, glaucoma, subluxation of the globe, and retinal detachment."
+          Severely affected older individuals can also have proptosis from skull osteosclerosis. Sources: Carlson et al
+          2010 (PMID:20566907); Popiela & Austin 2015 (PMID:26286906); Kim et al 2018 (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: papilledema, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Involvement of the orbit has led to blurred
+          vision, proptosis, papilledema, epiphora, glaucoma, subluxation of the globe, and retinal detachment."
+          Sources: Carlson et al 2010 (PMID:20566907); Popiela & Austin 2015 (PMID:26286906); Kim et al 2018
+          (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: epiphora, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Involvement of the orbit has led to blurred
+          vision, proptosis, papilledema, epiphora, glaucoma, subluxation of the globe, and retinal detachment."
+          Sources: Carlson et al 2010 (PMID:20566907); Popiela & Austin 2015 (PMID:26286906); Kim et al 2018
+          (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: glaucoma, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Involvement of the orbit has led to blurred
+          vision, proptosis, papilledema, epiphora, glaucoma, subluxation of the globe, and retinal detachment."
+          Sources: Carlson et al 2010 (PMID:20566907); Popiela & Austin 2015 (PMID:26286906); Kim et al 2018
+          (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: subluxation of the globe, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Involvement of the orbit has led to blurred
+          vision, proptosis, papilledema, epiphora, glaucoma, subluxation of the globe, and retinal detachment."
+          Sources: Carlson et al 2010 (PMID:20566907); Popiela & Austin 2015 (PMID:26286906); Kim et al 2018
+          (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: retinal detachment, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Involvement of the orbit has led to blurred
+          vision, proptosis, papilledema, epiphora, glaucoma, subluxation of the globe, and retinal detachment."
+          Sources: Carlson et al 2010 (PMID:20566907); Popiela & Austin 2015 (PMID:26286906); Kim et al 2018
+          (PMID:29620655).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: cranial nerve compression, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Sclerosis of the cranial nerve foramina can lead
+          to direct nerve compression or neurovascular compromise." The Summary calls this cranial nerve impingement and
+          notes that facial palsy can result.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: neurovascular compromise, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Sclerosis of the cranial nerve foramina can lead
+          to direct nerve compression or neurovascular compromise."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: cochlear nerve compression, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Sensorineural hearing loss is caused by narrowing
+          of the internal auditory canal and compression of the cochlear nerve and/or vasculature."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: cochlear vasculature compression, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Sensorineural hearing loss is caused by narrowing
+          of the internal auditory canal and compression of the cochlear nerve and/or vasculature."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: facial paralysis, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "The most common deficits are hearing loss, vision
+          problems, and facial paralysis." Facial features: "In older individuals who are severely affected,
+          osteosclerosis of the skull can lead to macrocephaly, frontal bossing, enlargement of the mandible, proptosis,
+          and cranial nerve impingement resulting in facial palsy."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: absence of functioning eighth cranial nerve, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "General contraindications for cochlear implants incl narrowed
+          internal auditory canal & absence of functioning 8th cranial nerve, both of which can occur in CED."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: increased intracranial pressure, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Calvarial hyperostosis can lead to increased
+          intracranial pressure, chronic headaches that can be severe, and frontal bossing." Management recommends
+          monitoring for signs and symptoms of increased intracranial pressure.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: frontal bossing, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Calvarial hyperostosis can lead to increased
+          intracranial pressure, chronic headaches that can be severe, and frontal bossing." Facial features notes this
+          in older, severely affected individuals.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: clonus, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Rarely, clonus, sensory loss, slurred speech,
+          dysphagia, cerebellar ataxia, and bowel and bladder incontinence are reported." Clonus source: Neuhauser et al
+          1948 (PMID:18869144); remaining findings: Carlson et al 2010 (PMID:20566907).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: sensory loss, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Rarely, clonus, sensory loss, slurred speech,
+          dysphagia, cerebellar ataxia, and bowel and bladder incontinence are reported." Source: Carlson et al 2010
+          (PMID:20566907).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: slurred speech, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Rarely, clonus, sensory loss, slurred speech,
+          dysphagia, cerebellar ataxia, and bowel and bladder incontinence are reported." Source: Carlson et al 2010
+          (PMID:20566907).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: dysphagia, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Rarely, clonus, sensory loss, slurred speech,
+          dysphagia, cerebellar ataxia, and bowel and bladder incontinence are reported." Source: Carlson et al 2010
+          (PMID:20566907).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: cerebellar ataxia, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Rarely, clonus, sensory loss, slurred speech,
+          dysphagia, cerebellar ataxia, and bowel and bladder incontinence are reported." Source: Carlson et al 2010
+          (PMID:20566907).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: bowel incontinence, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Rarely, clonus, sensory loss, slurred speech,
+          dysphagia, cerebellar ataxia, and bowel and bladder incontinence are reported." Source: Carlson et al 2010
+          (PMID:20566907).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: bladder incontinence, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Rarely, clonus, sensory loss, slurred speech,
+          dysphagia, cerebellar ataxia, and bowel and bladder incontinence are reported." Source: Carlson et al 2010
+          (PMID:20566907).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: macrocephaly, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Facial features: "In older individuals who are severely
+          affected, osteosclerosis of the skull can lead to macrocephaly, frontal bossing, enlargement of the mandible,
+          proptosis, and cranial nerve impingement resulting in facial palsy." Children do not typically have
+          recognizable facial-feature changes.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: enlargement of the mandible, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Facial features: "In older individuals who are severely
+          affected, osteosclerosis of the skull can lead to macrocephaly, frontal bossing, enlargement of the mandible,
+          proptosis, and cranial nerve impingement resulting in facial palsy."
+
+  # Endocrine and less-common findings.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hypopituitarism, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypopituitarism has been described
+          in several individuals, resulting in short stature, delayed pubertal development, and hypocortisolism." "In
+          addition, hypopituitarism may be secondary to direct effects of TGFB1 on the pituitary gland." Sources:
+          Yuldashev et al 2017 (PMID:28261436); Li et al 2022 (PMID:34490910); Das et al 2021 (PMID:35415221).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: short stature, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypopituitarism has been described
+          in several individuals, resulting in short stature, delayed pubertal development, and hypocortisolism."
+          Sources: Yuldashev et al 2017 (PMID:28261436); Li et al 2022 (PMID:34490910).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: delayed pubertal development, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypopituitarism has been described
+          in several individuals, resulting in short stature, delayed pubertal development, and hypocortisolism."
+          "Hypogonadism and lack of pubertal development has also been attributed to reduced adipose tissue and/or
+          direct effects of TGFB1 on the gonads." Sources: Yuldashev et al 2017 (PMID:28261436); Li et al 2022
+          (PMID:34490910); Das et al 2021 (PMID:35415221).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hypocortisolism, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypopituitarism has been described
+          in several individuals, resulting in short stature, delayed pubertal development, and hypocortisolism."
+          Sources: Yuldashev et al 2017 (PMID:28261436); Li et al 2022 (PMID:34490910).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hypogonadism, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypogonadism and lack of pubertal
+          development has also been attributed to reduced adipose tissue and/or direct effects of TGFB1 on the gonads."
+          Source: Das et al 2021 (PMID:35415221).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hypothyroidism, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Endocrine manifestations: "Hypothyroidism is also rarely
+          described as a result of pituitary effects or autoimmune hypothyroidism." Source: Das et al 2021
+          (PMID:35415221).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: anemia, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Less common manifestations in individuals with CED include
+          anemia (hypothesized to be caused by a narrowed medullary cavity), hepatosplenomegaly, atrophic skin,
+          hyperhidrosis of the hands and feet, delayed dental eruption, and extensive dental caries."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hepatosplenomegaly, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Less common manifestations in individuals with CED include
+          anemia (hypothesized to be caused by a narrowed medullary cavity), hepatosplenomegaly, atrophic skin,
+          hyperhidrosis of the hands and feet, delayed dental eruption, and extensive dental caries."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: atrophic skin, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Less common manifestations in individuals with CED include
+          anemia (hypothesized to be caused by a narrowed medullary cavity), hepatosplenomegaly, atrophic skin,
+          hyperhidrosis of the hands and feet, delayed dental eruption, and extensive dental caries."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: delayed dental eruption, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Less common manifestations in individuals with CED include
+          anemia (hypothesized to be caused by a narrowed medullary cavity), hepatosplenomegaly, atrophic skin,
+          hyperhidrosis of the hands and feet, delayed dental eruption, and extensive dental caries."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: extensive dental caries, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Less common manifestations in individuals with CED include
+          anemia (hypothesized to be caused by a narrowed medullary cavity), hepatosplenomegaly, atrophic skin,
+          hyperhidrosis of the hands and feet, delayed dental eruption, and extensive dental caries."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hyperhidrosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: hand
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Less common manifestations in individuals with CED include
+          anemia (hypothesized to be caused by a narrowed medullary cavity), hepatosplenomegaly, atrophic skin,
+          hyperhidrosis of the hands and feet, delayed dental eruption, and extensive dental caries."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: hyperhidrosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: foot
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Less common manifestations in individuals with CED include
+          anemia (hypothesized to be caused by a narrowed medullary cavity), hepatosplenomegaly, atrophic skin,
+          hyperhidrosis of the hands and feet, delayed dental eruption, and extensive dental caries."
+
+  # Isolated or uncertain observations; these are not defining CED features.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: associated_with
+      object: { encoding: decreased bone strength, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "Bone strength measured by bone impact
+          microindentation in three sibs with CED was below normal. Because of the small sample size, the difference in
+          bone strength was not statistically significant." Source: Herrera et al 2017 (PMID:28842728).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: associated_with
+      object: { encoding: bone defect, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Chronic intracranial hypertension led to a bone
+          defect and meningoencephalocele in one individual at age 57 years." Source: Yanagihara et al 2022
+          (PMID:36130541).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: associated_with
+      object: { encoding: meningoencephalocele, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Chronic intracranial hypertension led to a bone
+          defect and meningoencephalocele in one individual at age 57 years." Source: Yanagihara et al 2022
+          (PMID:36130541).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: associated_with
+      object: { encoding: osteoblastoma of the distal radius, prioritize: [Disease] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Other: "Osteoblastoma of the distal radius and enchondroma of
+          the fifth finger have each been reported in one individual with clinical and radiographic diagnosis of CED and
+          no TGFB1 pathogenic variant identified." Source: Nagasawa et al 2010 (PMID:19943817) for enchondroma; Yonezawa
+          et al 2021 (PMID:33555353) for osteoblastoma.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: associated_with
+      object: { encoding: enchondroma of the fifth finger, prioritize: [Disease] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Other: "Osteoblastoma of the distal radius and enchondroma of
+          the fifth finger have each been reported in one individual with clinical and radiographic diagnosis of CED and
+          no TGFB1 pathogenic variant identified." Sources: Nagasawa et al 2010 (PMID:19943817); Yonezawa et al 2021
+          (PMID:33555353).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: associated_with
+      object: { encoding: ascending aortic dilation, prioritize: [Disease, PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Other: "The authors are aware of one teenager with CED who died
+          following dissection of a dilated ascending aorta." "To date, it is unknown if dilatation of the aorta is a
+          rare manifestation of CED." The authors are unaware of additional cases and make no recommendation for routine
+          aortic evaluation. Source: Authors, personal communication.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: associated_with
+      object: { encoding: aortic dissection, prioritize: [Disease, PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Other: "The authors are aware of one teenager with CED who died
+          following dissection of a dilated ascending aorta." It is unknown whether aortic dilatation is a rare CED
+          manifestation; no additional individuals with aortic disease are known to the authors. Source: Authors,
+          personal communication.
+
+  # Ribbing disease phenotypic variation.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: Ribbing disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: osteosclerosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - qualifier: anatomical_context_qualifier
+          method: value
+          encoding: long bone
+          prioritize: [AnatomicalEntity]
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Ribbing disease, an osteosclerotic disease of the long bones
+          that is radiographically indistinguishable from CED and usually presents with bone pain after puberty, is now
+          known to be caused by pathogenic variants in TGFB1." CED and Ribbing disease represent phenotypic variations
+          of the same disorder. Sources: Makita et al 2000 (PMID:10748417); Janssens et al 2006 (PMID:15894597).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: Ribbing disease, prioritize: [Disease] }
+      predicate: has_phenotype
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Ribbing disease, an osteosclerotic disease of the long bones
+          that is radiographically indistinguishable from CED and usually presents with bone pain after puberty, is now
+          known to be caused by pathogenic variants in TGFB1." Sources: Makita et al 2000 (PMID:10748417); Janssens et
+          al 2006 (PMID:15894597).
+
+  # Gene-disease relationships.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Molecular_Genetics_'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: gene_associated_with_condition
+      object: { encoding: camurati-englemann disease, prioritize: [Disease] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, GeneReview Scope: "CED and Ribbing disease are both caused by pathogenic variants in
+          TGFB1 and represent phenotypic variations of the same disorder." Molecular Genetics: "Mechanism of disease
+          causation. Gain of function." Table A: TGFB1 chromosome locus 19q13.2, transforming growth factor beta-1
+          proprotein. Table B identifiers: CAEND1 OMIM:131300; TGFB1 OMIM:190180. Molecular genetic testing references
+          include Richards et al 2015 (PMID:25741868).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: gene_associated_with_condition
+      object: { encoding: Ribbing disease, prioritize: [Disease] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics: "Ribbing disease, an osteosclerotic disease of the long bones
+          that is radiographically indistinguishable from CED and usually presents with bone pain after puberty, is now
+          known to be caused by pathogenic variants in TGFB1." "Thus, CED and Ribbing disease represent phenotypic
+          variations of the same disorder." Table B: Ribbing disease OMIM:601477. Sources: Makita et al 2000
+          (PMID:10748417); Janssens et al 2006 (PMID:15894597).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Genetically_Related_Allelic_Disorder_'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: gene_associated_with_condition
+      object: { encoding: OMIM:618213, prioritize: [Disease] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Genetically Related (Allelic) Disorders: "Biallelic loss-of-function variants in TGFB1
+          have been reported in several individuals with inflammatory bowel disease, immunodeficiency, and
+          encephalopathy (OMIM 618213)." This biallelic loss-of-function disorder is distinct from the gain-of-function
+          mechanism stated for CED.
+
+  # Table 7 DNA and protein variants; every row has two separate edges.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_sequence_variant
+      object: { encoding: c.30_38dupGCTGCTGCT, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.30_38dupGCTGCTGCT |
+          p.Leu11_Leu13dup." Molecular Pathogenesis: "the p.Leu11_Leu13dup and p.Tyr81His pathogenic variants caused a
+          decrease in the amount of TGFB1 secreted. However, in a luciferase reporter assay specific for TGFB1-induced
+          transcriptional response, the mutated cells showed increased luciferase activity, suggesting intracellular
+          activation of the receptor." Source: Janssens et al 2003 (PMID:12493741). Table 7 variants were provided by
+          the authors and were not independently verified by GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_sequence_variant
+      object: { encoding: p.Leu11_Leu13dup, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.30_38dupGCTGCTGCT |
+          p.Leu11_Leu13dup." This is the separate protein-level representation of the paired DNA duplication. The
+          variant decreased secreted TGFB1 but increased TGFB1-induced luciferase reporter activity, suggesting
+          intracellular receptor activation. Source: Janssens et al 2003 (PMID:12493741). Table 7 variants were
+          author-supplied and not independently verified by GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: c.241T>C, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.241T>C | p.Tyr81His."
+          Molecular Pathogenesis: "the p.Leu11_Leu13dup and p.Tyr81His pathogenic variants caused a decrease in the
+          amount of TGFB1 secreted. However, in a luciferase reporter assay specific for TGFB1-induced transcriptional
+          response, the mutated cells showed increased luciferase activity, suggesting intracellular activation of the
+          receptor." Source: Janssens et al 2003 (PMID:12493741). Table 7 variants were author-supplied and not
+          independently verified by GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: p.Tyr81His, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.241T>C | p.Tyr81His." This is
+          the separate protein-level representation of the paired DNA missense change. The variant decreased secreted
+          TGFB1 but increased TGFB1-induced luciferase reporter activity, suggesting intracellular receptor activation.
+          Source: Janssens et al 2003 (PMID:12493741). Table 7 variants were author-supplied and not independently
+          verified by GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: c.652C>T, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.652C>T | p.Arg218Cys | Common
+          pathogenic variant; identified in ~40% of individuals w/CED." In vitro analysis of p.Arg218Cys mutated
+          constructs showed increased active TGFB1 in the medium of transfected cells. Frequency citations: Janssens et
+          al 2000 (PMID:11062463); Kinoshita et al 2000 (PMID:10973241); Campos-Xavier et al 2001 (PMID:11810278); Hecht
+          et al 2001 (PMID:11260231); Mumm et al 2001; Janssens et al 2003 (PMID:12493741); Kinoshita et al 2004
+          (PMID:15103729); Wallace et al 2004 (PMID:15326622); Janssens et al 2006 (PMID:15894597); Van Hul et al 2019
+          (PMID:30721323). Table 7 variants were author-supplied and not independently verified by GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: p.Arg218Cys, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.652C>T | p.Arg218Cys | Common
+          pathogenic variant; identified in ~40% of individuals w/CED." This is the separate protein-level edge. "In
+          vitro analysis of p.Arg218Cys, p.His222Asp, and p.Cys225Arg mutated constructs also showed increased active
+          TGFB1 in the medium of transfected cells." Sources: Janssens et al 2003 (PMID:12493741); Walton et al 2010
+          (PMID:20308061); frequency citations are the Table 7 footnote references, including Janssens et al 2000
+          (PMID:11062463), Kinoshita et al 2000 (PMID:10973241), Campos-Xavier et al 2001 (PMID:11810278), and Janssens
+          et al 2006 (PMID:15894597). Table 7 variants were author-supplied and not independently verified by
+          GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: c.653G>A, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.653G>A | p.Arg218His | Common
+          pathogenic variants; identified in ~35% of individuals w/CED." "p.Arg218His mutated fibroblasts from
+          individuals with CED showed increased active TGFB1 in the cell media compared to normal fibroblasts." Source
+          for functional evidence: Saito & Kinoshita 2001 (PMID:11278244). Frequency citations include Janssens et al
+          2000 (PMID:11062463); Kinoshita et al 2000 (PMID:10973241); Campos-Xavier et al 2001 (PMID:11810278); Hecht et
+          al 2001 (PMID:11260231); Mumm et al 2001; Janssens et al 2003 (PMID:12493741); Kinoshita et al 2004
+          (PMID:15103729); Wallace et al 2004 (PMID:15326622); Janssens et al 2006 (PMID:15894597); Van Hul et al 2019
+          (PMID:30721323). Table 7 variants were author-supplied and not independently verified by GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: p.Arg218His, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.653G>A | p.Arg218His | Common
+          pathogenic variants; identified in ~35% of individuals w/CED." This is the separate protein-level edge.
+          "p.Arg218His mutated fibroblasts from individuals with CED showed increased active TGFB1 in the cell media
+          compared to normal fibroblasts." Sources: Saito & Kinoshita 2001 (PMID:11278244); Janssens et al 2000
+          (PMID:11062463); Kinoshita et al 2000 (PMID:10973241); Campos-Xavier et al 2001 (PMID:11810278); Janssens et
+          al 2006 (PMID:15894597). Table 7 variants were author-supplied and not independently verified by GeneReviews
+          staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: c.673T>C, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.673T>C | p.Cys225Arg." "In
+          vitro analysis of p.Arg218Cys, p.His222Asp, and p.Cys225Arg mutated constructs also showed increased active
+          TGFB1 in the medium of transfected cells." Molecular Pathogenesis states that LAP substitutions near
+          interchain disulfide bonds can disrupt LAP dimerization and binding to active TGFB1. Sources: Janssens et al
+          2003 (PMID:12493741); Walton et al 2010 (PMID:20308061). Table 7 variants were author-supplied and not
+          independently verified by GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: p.Cys225Arg, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.673T>C | p.Cys225Arg." This
+          is the separate protein-level edge. "In vitro analysis of p.Arg218Cys, p.His222Asp, and p.Cys225Arg mutated
+          constructs also showed increased active TGFB1 in the medium of transfected cells." Sources: Janssens et al
+          2003 (PMID:12493741); Walton et al 2010 (PMID:20308061). Table 7 variants were author-supplied and not
+          independently verified by GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: c.664C>G, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.664C>G | p.His222Asp." "In
+          vitro analysis of p.Arg218Cys, p.His222Asp, and p.Cys225Arg mutated constructs also showed increased active
+          TGFB1 in the medium of transfected cells." Molecular Pathogenesis states that LAP substitutions near
+          interchain disulfide bonds can disrupt LAP dimerization and binding to active TGFB1. Sources: Janssens et al
+          2003 (PMID:12493741); Walton et al 2010 (PMID:20308061). Table 7 variants were author-supplied and not
+          independently verified by GeneReviews staff.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.tgfb1_pathogenic_variants_referenc'
+    statement:
+      subject: { encoding: TGFB1, prioritize: [Gene] }
+      predicate: has_missense_variant
+      object: { encoding: p.His222Asp, prioritize: [SequenceVariant] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Molecular Genetics, Table 7: "NM_000660.7 / NP_000651.3 | c.664C>G | p.His222Asp." This
+          is the separate protein-level edge. "In vitro analysis of p.Arg218Cys, p.His222Asp, and p.Cys225Arg mutated
+          constructs also showed increased active TGFB1 in the medium of transfected cells." Sources: Janssens et al
+          2003 (PMID:12493741); Walton et al 2010 (PMID:20308061). Table 7 variants were author-supplied and not
+          independently verified by GeneReviews staff.
+
+  # Mode of inheritance and genetic-counseling context.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Genetic_Counseling_'
+    statement:
+      subject: { encoding: camurati-englemann disease, prioritize: [Disease] }
+      predicate: has_mode_of_inheritance
+      object: { encoding: autosomal dominant inheritance, prioritize: [GeneticInheritance] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Genetic Counseling: "Camurati-Engelmann disease (CED) is inherited in an autosomal
+          dominant manner." "Each child of an individual with CED has a 50% chance of inheriting the TGFB1 pathogenic
+          variant." Some cases result from a de novo TGFB1 pathogenic variant; the proportion is unknown. Reduced
+          penetrance occurs, but exact penetrance is unknown. If a known proband variant is absent from both parents'
+          leukocyte DNA, recurrence risk to siblings is estimated at 1% because of possible parental germline mosaicism.
+          Sources: Rahbari et al 2016 (PMID:26656846); Wallace et al 2004 (PMID:15326622); Hughes et al 2019
+          (PMID:30690794).
+
+  # Symptom-specific treatment use. These are not unqualified efficacy claims.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "Several investigators report success with corticosteroid
+          treatment in reducing pain and weakness; improving gait, exercise tolerance, and flexion contractures;
+          correcting anemia and hepatosplenomegaly; and preventing or delaying bone hyperostosis, including skull
+          involvement and cranial nerve impingement." "Higher-dose steroids may help with acute pain crises." Sources:
+          Lindstrom 1974 (PMID:4461085); Baş et al 1999 (PMID:10457303); Wallace et al 2004 (PMID:15326622); Mwasamwaja
+          et al 2018 (PMID:30034812); Liang et al 2022 (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: muscle weakness, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: corticosteroid treatment has reported success "in reducing
+          pain and weakness; improving gait, exercise tolerance, and flexion contractures." Clinical Characteristics
+          likewise reports reduced pain and weakness in several individuals. Sources: Lindstrom 1974 (PMID:4461085); Baş
+          et al 1999 (PMID:10457303); Wallace et al 2004 (PMID:15326622); Mwasamwaja et al 2018 (PMID:30034812); Liang
+          et al 2022 (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: gait issues, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: corticosteroid treatment has reported success in "improving
+          gait, exercise tolerance, and flexion contractures." Sources: Lindstrom 1974 (PMID:4461085); Baş et al 1999
+          (PMID:10457303); Wallace et al 2004 (PMID:15326622); Mwasamwaja et al 2018 (PMID:30034812); Liang et al 2022
+          (PMID:36339419).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: decreased exercise tolerance, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: corticosteroid treatment has reported success in "improving
+          gait, exercise tolerance, and flexion contractures." The object names the impairment addressed by the reported
+          improvement in exercise tolerance. Sources: Lindstrom 1974 (PMID:4461085); Baş et al 1999 (PMID:10457303);
+          Wallace et al 2004 (PMID:15326622); Mwasamwaja et al 2018 (PMID:30034812).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: flexion contracture, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: corticosteroid treatment has reported success in "improving
+          gait, exercise tolerance, and flexion contractures." Sources: Lindstrom 1974 (PMID:4461085); Baş et al 1999
+          (PMID:10457303); Wallace et al 2004 (PMID:15326622); Mwasamwaja et al 2018 (PMID:30034812).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: anemia, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "Several investigators report success with corticosteroid
+          treatment in reducing pain and weakness; improving gait, exercise tolerance, and flexion contractures;
+          correcting anemia and hepatosplenomegaly." Sources: Lindstrom 1974 (PMID:4461085); Baş et al 1999
+          (PMID:10457303); Wallace et al 2004 (PMID:15326622); Mwasamwaja et al 2018 (PMID:30034812).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: hepatosplenomegaly, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "Several investigators report success with corticosteroid
+          treatment in reducing pain and weakness; improving gait, exercise tolerance, and flexion contractures;
+          correcting anemia and hepatosplenomegaly." Sources: Lindstrom 1974 (PMID:4461085); Baş et al 1999
+          (PMID:10457303); Wallace et al 2004 (PMID:15326622); Mwasamwaja et al 2018 (PMID:30034812).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Corticosteroids may delay bone hyperostosis and
+          prevent or delay the onset of skull involvement." Radiographic/scintigraphic responses were mixed: Verbruggen
+          et al 1985 (PMID:4057207) and Baş et al 1999 (PMID:10457303) reported no regression in some evaluations;
+          Lindstrom 1974 (PMID:4461085) and Baş et al 1999 reported diminished sclerosis; Verbruggen et al 1985 and
+          Inaoka et al 2001 (PMID:11452173) reported reduced radioactivity on bone scintigraphy.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: skull hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: corticosteroids have been reported to prevent or delay
+          "bone hyperostosis, including skull involvement and cranial nerve impingement." Clinical Characteristics
+          states that corticosteroids may prevent or delay skull involvement; radiographic response was not uniform.
+          Sources: Lindstrom 1974 (PMID:4461085); Baş et al 1999 (PMID:10457303); Wallace et al 2004 (PMID:15326622);
+          Mwasamwaja et al 2018 (PMID:30034812).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: cranial nerve compression, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: corticosteroids have been reported to prevent or delay
+          "bone hyperostosis, including skull involvement and cranial nerve impingement." This preserves
+          prevention/delay wording rather than asserting reversal of compression. Sources: Lindstrom 1974
+          (PMID:4461085); Baş et al 1999 (PMID:10457303); Wallace et al 2004 (PMID:15326622); Mwasamwaja et al 2018
+          (PMID:30034812).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: prednisolone, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: camurati-englemann disease, prioritize: [Disease] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "Individuals with severe symptoms can be treated with a
+          bolus of prednisolone 1.0-2.0 mg/kg/day followed by rapid tapering to the lowest alternate-day dose tolerated.
+          Less symptomatic individuals can be started on 0.5-1.0 mg/kg every other day." Some individuals may
+          discontinue steroids during quiescent periods. No narrower target is inferred from this dosing text.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: losartan, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "Reduced bone pain and increased physical activity have
+          been reported in several individuals treated with losartan." "Treatment with losartan has not improved bone
+          pain in some individuals." Losartan downregulates transforming growth factor beta-1 signaling; long-term
+          follow-up is needed. Benefit sources: Ayyavoo et al 2014 (PMID:25140400); Simsek-Kiper et al 2014
+          (PMID:25099136); Kim et al 2018 (PMID:29620655); Abdulla 2019 (PMID:31293304); Agarwal et al 2021
+          (PMID:35415233). Non-response sources: Yuldashev et al 2017 (PMID:28261436); Combier et al 2018
+          (PMID:29452301).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: losartan, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: decreased physical activity, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "Reduced bone pain and increased physical activity have
+          been reported in several individuals treated with losartan." The object names the impairment addressed by the
+          reported increase in physical activity; it is not asserted as a universal CED phenotype. Sources: Ayyavoo et
+          al 2014 (PMID:25140400); Simsek-Kiper et al 2014 (PMID:25099136); Kim et al 2018 (PMID:29620655); Abdulla 2019
+          (PMID:31293304); Agarwal et al 2021 (PMID:35415233).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: combined corticosteroid therapy and losartan, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "Combination corticosteroid therapy and losartan led to
+          decreased bone pain and initiation of pubertal development in a female age 18 years." This
+          combination-specific observation is not attributed to either drug alone. Source: Cui et al 2022
+          (PMID:35784539).
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: combined corticosteroid therapy and losartan, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: delayed pubertal development, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "Combination corticosteroid therapy and losartan led to
+          decreased bone pain and initiation of pubertal development in a female age 18 years." This
+          combination-specific observation is not attributed to either drug alone. Source: Cui et al 2022
+          (PMID:35784539).
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: physical medicine and rehabilitation, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: muscle weakness, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Weakness / Gait issues | Physical medicine, rehab, & PT." Consider
+          positioning and mobility devices and a disability parking placard. This is recommended supportive care, not a
+          measured efficacy claim.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: physical medicine and rehabilitation, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: gait issues, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Weakness / Gait issues | Physical medicine, rehab, & PT." Consider
+          positioning and mobility devices and a disability parking placard. This is recommended supportive care, not a
+          measured efficacy claim.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: physical therapy, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: muscle weakness, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Weakness / Gait issues | Physical medicine, rehab, & PT." The
+          Summary recommends management of muscle weakness and gait issues per physical medicine/rehabilitation
+          specialists and a physical therapist.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: physical therapy, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: gait issues, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Weakness / Gait issues | Physical medicine, rehab, & PT." The
+          Summary recommends management of muscle weakness and gait issues per physical medicine/rehabilitation
+          specialists and a physical therapist.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: orthopedic treatment, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: joint contracture, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Joint contractures / Other musculoskeletal manifestations |
+          Treatment per orthopedist w/experience in skeletal dysplasias."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: orthopedic treatment, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: other musculoskeletal manifestations, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Joint contractures / Other musculoskeletal manifestations |
+          Treatment per orthopedist w/experience in skeletal dysplasias."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: analgesic medications, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5 lists "Analgesic medications" among treatment options for bone pain.
+          This records recommended use without asserting a response rate.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    statement:
+      subject: { encoding: narcotic analgesics, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Musculoskeletal: "The reported severity of bone pain ranged
+          from mild (not requiring any treatment) to severe (requiring narcotic analgesics)." This records reported use
+          for severe pain, not generalized efficacy. Source: Yuldashev et al 2017 (PMID:28261436).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: non-pharmacologic pain control, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5 lists "Non-pharmacologic pain control methods" among treatment
+          options for bone pain.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: intramedullary reaming, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5 lists "Surgical treatment (intramedullary reaming)" for bone pain and
+          states: "Successful surgical treatment of persistent bone pain has been described." Sources: Oztürkmen &
+          Karamehmetoğlu 2011 (PMID:21478664); Saboya et al 2021 (PMID:34351871).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: calcitonin, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Pain relief from intranasal calcitonin was reported in 1 person."
+          Source: Trombetti et al 2012 (PMID:22044122).
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: infliximab, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Infliximab treatment alleviated pain in 1 person who did not
+          respond to corticosteroids." Source: Moreira et al 2017 (PMID:29184006).
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: otolaryngology management, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: hearing loss, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Hearing loss | Mgmt per otolaryngologist." Evaluation should
+          include BAER and CT with fine cuts through the inner ear. This is a management recommendation, not an efficacy
+          claim.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: bilateral myringotomy, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: conductive hearing loss, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Bilateral myringotomy can improve conductive hearing loss resulting
+          from serous otitis in persons w/CED."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: cochlear implantation, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: conductive hearing loss, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Cochlear implantation improved hearing in 1 person w/conductive
+          hearing loss & patent internal auditory canals." Reports of successful hearing-loss treatment are rare;
+          separate contraindication edges are retained below. Source: Friedland et al 2000 (PMID:10685567).
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: internal auditory canal decompression, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: hearing loss, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Surgical decompression of internal auditory canals can improve
+          hearing. However, reported results are mixed." "The skull hyperostosis is progressive, & cranial nerve
+          compression often recurs." Source: Carlson et al 2010 (PMID:20566907).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: facial nerve decompression, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: facial paralysis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Facial paralysis has been successfully treated by
+          surgical decompression of the facial nerve in one affected individual." Source: Achahbar et al 2021
+          (PMID:36131584). The possible sensorineural-hearing-loss risk is encoded separately.
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: ophthalmic subspecialist management, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: ocular manifestations, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Ocular manifestations | Ophthalmic subspecialist to manage complex
+          findings due to orbit involvement."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: low vision services, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: low vision, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5 lists "Low vision services" for ocular manifestations: children
+          through early intervention programs and/or school districts; adults through low-vision clinics and/or
+          community vision services, occupational therapy, and mobility services.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: craniectomy, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: headache, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5 lists craniectomy for headaches/increased ICP and states:
+          "Craniectomy relieved ↑ ICP & headaches." Recurrent cranial hyperostosis can occur after surgical
+          decompression. Sources: Carlson et al 2010 (PMID:20566907); Wong et al 2017 (PMID:28137547).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: craniectomy, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: increased intracranial pressure, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5 lists craniectomy for headaches/increased ICP and states:
+          "Craniectomy relieved ↑ ICP & headaches." Sources: Carlson et al 2010 (PMID:20566907); Wong et al 2017
+          (PMID:28137547).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: radical craniectomy with titanium mesh cranioplasty, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: recurrent cranial hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Recurrent cranial hyperostosis w/resultant ↑ ICP has been managed
+          by radical craniectomy w/titanium mesh cranioplasties." Source: Wong et al 2017 (PMID:28137547).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: radical craniectomy with titanium mesh cranioplasty, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: increased intracranial pressure, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Recurrent cranial hyperostosis w/resultant ↑ ICP has been managed
+          by radical craniectomy w/titanium mesh cranioplasties." Source: Wong et al 2017 (PMID:28137547).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: corticosteroid dose adjustment, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: hypertension, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Hypertension | Adjust corticosteroid dose as needed. Standard
+          treatments for hypertension as needed." "Hypertension may occur in those treated w/corticosteroid therapy."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: antihypertensive treatment, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: hypertension, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Hypertension | Adjust corticosteroid dose as needed. Standard
+          treatments for hypertension as needed." The Summary also recommends antihypertensives as needed.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: losartan dose adjustment, prioritize: [Treatment] }
+      predicate: applied_to_treat
+      object: { encoding: hypotension, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Hypotension | Adjust losartan dose as needed. Assess mobility, need
+          for adaptive devices, & fall precautions." "Hypotension may occur in those treated w/losartan."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: pamidronate, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: camurati-englemann disease, prioritize: [Disease] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Potential treatments to consider with caution: "Pamidronate did not improve
+          symptoms in four individuals." This edge records treatment use and non-response; no narrower symptom is
+          invented. Sources: Inaoka et al 2001 (PMID:11452173); Janssens et al 2006 (PMID:15894597).
+      - { annotation: number_of_cases, method: value, encoding: 4 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: clodronate, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: camurati-englemann disease, prioritize: [Disease] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Potential treatments to consider with caution: "Clodronate infusion caused
+          increased bone pain in one individual with CED and no improvement in another individual reported by Castro et
+          al [2005]." Two individuals were treated; the worsened-pain outcome also has a separate safety edge. Source:
+          Castro et al 2005 (PMID:15660289).
+      - { annotation: number_of_cases, method: value, encoding: 2 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: zoledronic acid, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Potential treatments to consider with caution: "Decreased bone pain,
+          decreased size of hyperostotic lesions in the long bones, improved weight gain, and improved ambulation were
+          reported in two individuals treated with zolendronic acid infusions." Source: Baroncelli et al 2017
+          (PMID:29230158). The source spelling `zolendronic` is retained inside the quotation; the normalized subject is
+          zoledronic acid.
+      - { annotation: number_of_cases, method: value, encoding: 2 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: zoledronic acid, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Potential treatments to consider with caution: "One adult had immediate bone
+          pain relief after a single intravenous dose of zolendronic acid." Source: Klemm et al 2023 (PMID:36880809).
+          This is a separate one-person observation from the two-person Baroncelli et al series.
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: zoledronic acid, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: long-bone hyperostotic lesions, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Potential treatments to consider with caution: "Decreased bone pain,
+          decreased size of hyperostotic lesions in the long bones, improved weight gain, and improved ambulation were
+          reported in two individuals treated with zolendronic acid infusions." Source: Baroncelli et al 2017
+          (PMID:29230158).
+      - { annotation: number_of_cases, method: value, encoding: 2 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: zoledronic acid, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: poor weight gain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Potential treatments to consider with caution: "Decreased bone pain,
+          decreased size of hyperostotic lesions in the long bones, improved weight gain, and improved ambulation were
+          reported in two individuals treated with zolendronic acid infusions." The object names the impairment
+          addressed by improved weight gain. Source: Baroncelli et al 2017 (PMID:29230158).
+      - { annotation: number_of_cases, method: value, encoding: 2 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: zoledronic acid, prioritize: [ChemicalEntity] }
+      predicate: applied_to_treat
+      object: { encoding: limited ambulation, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Potential treatments to consider with caution: "Decreased bone pain,
+          decreased size of hyperostotic lesions in the long bones, improved weight gain, and improved ambulation were
+          reported in two individuals treated with zolendronic acid infusions." Source: Baroncelli et al 2017
+          (PMID:29230158).
+      - { annotation: number_of_cases, method: value, encoding: 2 }
+
+  # Treatment-associated risks, adverse observations, and contraindications.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: predisposes_to_condition
+      object: { encoding: hypertension, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "Blood pressure should be monitored at each visit, as
+          hypertension can develop following the initiation of corticosteroid therapy." Table 5: "Hypertension may occur
+          in those treated w/corticosteroid therapy." This is a risk statement, not a universal outcome.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_recommen_1'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: predisposes_to_condition
+      object: { encoding: spinal osteoporosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 6: "CED does not appear to cause ↑ in spine density; therefore, steroid
+          therapy could lead to osteoporosis of spine." Annual bone-mineral-density evaluation is recommended in those
+          treated with corticosteroids. Source: Authors, personal observation.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: corticosteroids, prioritize: [Treatment] }
+      predicate: predisposes_to_condition
+      object: { encoding: spinal compression fractures, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Targeted Therapy: "After initiating corticosteroids, affected individuals
+          should be followed monthly, with efforts to taper the steroids to the lowest tolerated dose to reduce the risk
+          of osteoporosis and compression fractures of the spine." This is a risk-management statement.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: losartan, prioritize: [ChemicalEntity] }
+      predicate: predisposes_to_condition
+      object: { encoding: hypotension, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "Hypotension may occur in those treated w/losartan." Adjust losartan
+          dose as needed and assess mobility, adaptive-device needs, and fall precautions.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: clodronate, prioritize: [ChemicalEntity] }
+      predicate: exacerbates_condition
+      object: { encoding: bone pain, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Potential treatments to consider with caution: "Clodronate infusion caused
+          increased bone pain in one individual with CED and no improvement in another individual reported by Castro et
+          al [2005]." Source: Castro et al 2005 (PMID:15660289).
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: facial nerve decompression, prioritize: [Treatment] }
+      predicate: predisposes_to_condition
+      object: { encoding: sensorineural hearing loss, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Sensorineural hearing loss can also occur with
+          attempted decompression of the facial nerves." This possible procedural risk is separate from the reported
+          successful treatment of facial paralysis.
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Clinical_Characteristics_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: cranial surgical decompression, prioritize: [Treatment] }
+      predicate: associated_with
+      object: { encoding: recurrent cranial hyperostosis, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Clinical Characteristics, Neurologic: "Recurrent cranial hyperostosis following surgical
+          decompression can occur." This temporal association does not assert that surgery caused the underlying
+          hyperostotic disease. Source: Wong et al 2017 (PMID:28137547).
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: cellulose phosphate, prioritize: [ChemicalEntity] }
+      predicate: exacerbates_condition
+      object: { encoding: hypocalcemia, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Agents/Circumstances to Avoid: "Treatment with cellulose phosphate led to
+          worsening hypocalcemia and proximal myopathy in one individual."
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    provenance:
+      knowledge_level: observation
+    statement:
+      subject: { encoding: cellulose phosphate, prioritize: [ChemicalEntity] }
+      predicate: causes
+      object: { encoding: proximal myopathy, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Agents/Circumstances to Avoid: "Treatment with cellulose phosphate led to
+          worsening hypocalcemia and proximal myopathy in one individual."
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#_ced_Management_'
+    statement:
+      subject: { encoding: excess phosphate, prioritize: [ChemicalEntity, Treatment] }
+      predicate: contraindicated_in
+      object: { encoding: camurati-englemann disease, prioritize: [Disease] }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Summary, Management: "Agents/circumstances to avoid: Excess phosphate." Management,
+          Agents/Circumstances to Avoid: "Treatment with cellulose phosphate led to worsening hypocalcemia and proximal
+          myopathy in one individual."
+      - { annotation: number_of_cases, method: value, encoding: 1 }
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: cochlear implantation, prioritize: [Treatment] }
+      predicate: contraindicated_in
+      object: { encoding: narrowed internal auditory canal, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "General contraindications for cochlear implants incl narrowed
+          internal auditory canal & absence of functioning 8th cranial nerve, both of which can occur in CED."
+  - source:
+      url: 'https://www.ncbi.nlm.nih.gov/sites/books/NBK1156/#ced.T.camuratiengelmann_disease_treatmen'
+    statement:
+      subject: { encoding: cochlear implantation, prioritize: [Treatment] }
+      predicate: contraindicated_in
+      object: { encoding: absence of functioning eighth cranial nerve, prioritize: [PhenotypicFeature] }
+      qualifiers:
+        - {
+            qualifier: disease_context_qualifier,
+            method: value,
+            encoding: camurati-englemann disease,
+            prioritize: [Disease]
+          }
+    annotations:
+      - annotation: supporting_text
+        encoding: >-
+          GeneReviews NBK1156, Management, Table 5: "General contraindications for cochlear implants incl narrowed
+          internal auditory canal & absence of functioning 8th cranial nerve, both of which can occur in CED."
