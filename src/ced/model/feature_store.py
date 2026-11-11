@@ -81,7 +81,12 @@ def prepare_features(
         ).fetchall()
     ]
     for table in ("fitted_fields", "fitted_categories"):
-        connection.execute(f"COPY {table} TO '{root / (table + '.parquet')}' (FORMAT PARQUET, COMPRESSION ZSTD)")
+        query = table
+        if table == "fitted_categories":
+            query = """(SELECT c.*, f.idx AS field_id FROM fitted_categories c
+                JOIN fitted_fields f ON c.owner_kind=f.owner_kind AND c.path=f.path
+                WHERE f.kind='categorical')"""
+        connection.execute(f"COPY {query} TO '{root / (table + '.parquet')}' (FORMAT PARQUET, COMPRESSION ZSTD)")
     # Shifted owner index: nodes use [0,node_count), statements use [node_count,node_count+statement_count).
     # Materialised once because both value stores read the same join. The owner joins
     # must stay pure equi-joins on id: adding owner_kind to a LEFT JOIN ON clause stops

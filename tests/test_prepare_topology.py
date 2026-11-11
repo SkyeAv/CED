@@ -384,3 +384,28 @@ def test_encode_dataset_text_resolves_every_record(tmp_path: Path, monkeypatch: 
     assert sha256_file(Path(again.index_path)) == digest_before
     assert not (dataset / "text-records.partial.parquet").exists()
     assert not (dataset / "text-missing.partial.parquet").exists()
+
+
+def test_prepared_vocabulary_loads_training_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Use the real producer, not a hand-written vocabulary with a different schema."""
+    from ced.model.feature_index import load_feature_metadata
+
+    _, _, runtime = prepare(tmp_path, monkeypatch)
+    # Ensure s0 trains, so both N0's numeric and N1's categorical fields are fitted.
+    group = statement_group("N0", "p0", "N1")
+    seed = next(seed for seed in range(100) if group_split(group, runtime.split.model_copy(update={"seed": seed})) == 0)
+    runtime = runtime.model_copy(update={"split": runtime.split.model_copy(update={"seed": seed})})
+    dataset = prepare_dataset(runtime, "snapshot")
+    counts, numeric = load_feature_metadata(dataset)
+    fields = pq.read_table(dataset / "fitted_fields.parquet").to_pylist()
+    categories = pq.read_table(dataset / "fitted_categories.parquet").to_pylist()
+    assert categories
+    expected = {}
+    for category in categories:
+        field = next(field for field in fields if field["idx"] == category["field_id"])
+        assert field["kind"] == "categorical"
+        assert field["owner_kind"] == category["owner_kind"]
+        assert field["path"] == category["path"]
+        expected[field["idx"]] = max(expected.get(field["idx"], 0), category["value_id"] + 1)
+    assert counts == expected
+    assert numeric == sorted(field["idx"] for field in fields if field["kind"] == "numeric")
