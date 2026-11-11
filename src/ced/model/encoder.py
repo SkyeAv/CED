@@ -38,14 +38,29 @@ class RelationalAttentionEncoder(nn.Module):
         if edge_index.shape[1] != edge_type_id.numel() or statement_features.shape[0] != edge_type_id.numel():
             raise ValueError("unaligned message tensors")
         state = self.input(nodes)
+        # Group edges by relation once per forward: a stable sort keeps the
+        # original edge order inside each type, so every per-type computation
+        # below sees the identical row sequence (and floating-point accumulation
+        # order, forward and backward) as the historical boolean-mask loop.
+        unique_types, inverse = torch.unique(edge_type_id, return_inverse=True)
+        inverse = inverse.reshape(-1)
+        order = torch.argsort(inverse, stable=True)
+        counts = torch.bincount(inverse, minlength=unique_types.numel()).tolist()
+        segments: list[tuple[int, slice]] = []
+        start = 0
+        for raw_type, count in zip(unique_types.tolist(), counts, strict=True):
+            segments.append((int(raw_type), slice(start, start + int(count))))
+            start += int(count)
+        sources_sorted = edge_index[0, order]
+        targets_sorted = edge_index[1, order]
         for layer_index in range(self.layers_count):
             messages = state.new_zeros(state.shape)
-            for parameter_index in torch.unique(edge_type_id).tolist():
-                selected = edge_type_id == parameter_index
-                sources = edge_index[0, selected]
-                targets = edge_index[1, selected]
-                relation = int(parameter_index)
-                gate = torch.sigmoid(self.gates(statement_features[selected]))
+            for relation, segment in segments:
+                # Per-type gathers mirror the reference autograd graph exactly:
+                # same index vectors, same separate state/statement gathers.
+                sources = sources_sorted[segment]
+                targets = targets_sorted[segment]
+                gate = torch.sigmoid(self.gates(statement_features[order[segment]]))
                 values = self.values[relation](state[sources]) * gate
                 scores = (self.queries[relation](state[targets]) * self.keys[relation](state[sources])).sum(-1)
                 # Stable per-target softmax without materializing a dense target-source matrix.
