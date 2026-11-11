@@ -83,21 +83,27 @@ def prepare_features(
     for table in ("fitted_fields", "fitted_categories"):
         connection.execute(f"COPY {table} TO '{root / (table + '.parquet')}' (FORMAT PARQUET, COMPRESSION ZSTD)")
     # Shifted owner index: nodes use [0,node_count), statements use [node_count,node_count+statement_count).
-    base = f"""SELECT CASE WHEN e.owner_kind='node' THEN e2.idx ELSE {node_count}+s.index END AS owner_index,
+    # Materialised once because both value stores read the same join. The owner joins
+    # must stay pure equi-joins on id: adding owner_kind to a LEFT JOIN ON clause stops
+    # DuckDB from hash-joining it and makes preparation quadratic in events x owners.
+    connection.execute(
+        f"""CREATE TEMP TABLE feature_base AS
+        SELECT CASE WHEN e.owner_kind='node' THEN e2.idx ELSE {node_count}+s.index END AS owner_index,
         coalesce(f.idx,0) AS field_id,e.ordinal,e.kind,coalesce(c.value_id,0) AS value_id,e.text,e.raw_json,
         CASE WHEN e.numeric IS NOT NULL THEN (e.numeric-coalesce(f.mean,0))/coalesce(f.scale,1) ELSE NULL END AS numeric,
         e.numeric IS NOT NULL AS valid
-        FROM feature_events e LEFT JOIN entities e2 ON e.owner_kind='node' AND e.owner_id=e2.id
-        LEFT JOIN splits s ON e.owner_kind='statement' AND e.owner_id=s.statement_id
+        FROM feature_events e LEFT JOIN entities e2 ON e.owner_id=e2.id
+        LEFT JOIN splits s ON e.owner_id=s.statement_id
         LEFT JOIN fitted_fields f ON e.owner_kind=f.owner_kind AND e.path=f.path AND e.kind=f.kind
         LEFT JOIN fitted_categories c ON e.owner_kind=c.owner_kind AND e.path=c.path AND e.raw_json=c.raw_json
         WHERE (e.owner_kind='node' AND e2.idx IS NOT NULL) OR (e.owner_kind='statement' AND s.index IS NOT NULL)"""
+    )
     owners = node_count + statement_count
     categorical_path = root / "categorical.parquet"
     connection.execute(
         f"""COPY (SELECT CAST(owner_index AS BIGINT) AS owner_index, CAST(field_id AS BIGINT) AS field_id,
                      CAST(value_id AS BIGINT) AS value_id, CAST(ordinal AS BIGINT) AS ordinal
-              FROM ({base}) WHERE kind='categorical' ORDER BY owner_index, field_id, ordinal)
+              FROM feature_base WHERE kind='categorical' ORDER BY owner_index, field_id, ordinal)
            TO '{categorical_path}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
     )
     categorical_rows = connection.execute(f"SELECT count(*) FROM read_parquet('{categorical_path}')").fetchone()
@@ -117,7 +123,7 @@ def prepare_features(
     connection.execute(
         f"""COPY (SELECT CAST(owner_index AS BIGINT) AS owner_index, CAST(field_id AS BIGINT) AS field_id,
                      CAST(coalesce(numeric, 0) AS REAL) AS value, CAST(valid AS BOOLEAN) AS valid
-              FROM ({base}) WHERE kind='numeric' ORDER BY owner_index, field_id)
+              FROM feature_base WHERE kind='numeric' ORDER BY owner_index, field_id)
            TO '{numeric_path}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
     )
     numeric_rows = connection.execute(f"SELECT count(*) FROM read_parquet('{numeric_path}')").fetchone()
