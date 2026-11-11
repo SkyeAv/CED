@@ -19,6 +19,7 @@ artifacts:
     role: kgx_archive
     urls: ['https://kgx-storage.ci.transltr.io/releases/chembl/1.0.2/chembl.tar.zst']
     size: 22320939
+    sha256: ceeb53fbf609d7b9c3fc00ed129af625f42dffb926f84c4fbf4ef8d369b08b55
     archive:
       format: tar.zst
       members:
@@ -31,14 +32,17 @@ artifacts:
     role: release_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/chembl/1.0.2/release-metadata.json']
     size: 680
+    sha256: 9b6ca2f5d5e654ee4f8b2b8a9cf7e4989e37dff4de9b0c7ffaac59283b67ef47
   - path: graph-metadata.json
     role: graph_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/chembl/1.0.2/graph-metadata.json']
     size: 67110
+    sha256: e41de681a08614dc10abea2607473489b2a73c6ddc6056c7242fc17b130efa0d
   - path: test-data.json
     role: test_data
     urls: ['https://kgx-storage.ci.transltr.io/releases/chembl/1.0.2/test-data.json']
     size: 27220
+    sha256: 68e6f585905a0f3825aa1f69294dfc9c205874b575cb5ba761ac1d7ade355682
 mapping:
   options:
     upstream_conflated: true

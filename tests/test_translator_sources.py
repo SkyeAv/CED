@@ -73,6 +73,14 @@ def test_artifacts_pin_an_exact_byte_size(catalog) -> None:
             assert artifact.size > 0, f"{name}/{artifact.path} has a non-positive pinned size"
 
 
+def test_artifacts_pin_an_observed_checksum(catalog) -> None:
+    """Digests were observed during the real fetch of these releases on wenceslaus; without them a
+    replaced file served from the same pinned URL would still verify as correct."""
+    for name in TRANSLATOR:
+        for artifact in catalog[name].artifacts:
+            assert artifact.sha256 is not None, f"{name}/{artifact.path} has no pinned sha256"
+
+
 def test_archive_declares_nodes_and_edges_with_expanded_caps(catalog) -> None:
     """The KGX adapter reads the extracted members by role, and the archive guard needs bounds
     large enough for the real expansion (ubergraph is ~380 MiB compressed). Member patterns cover

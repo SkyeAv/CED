@@ -24,6 +24,7 @@ artifacts:
     role: kgx_archive
     urls: ['https://kgx-storage.ci.transltr.io/releases/drugcentral/1.0.2/drugcentral.tar.zst']
     size: 2423293
+    sha256: abc36777946a8ff19230bb9afa7f6f1f8e75c07a0d79216b31374b6944512606
     archive:
       format: tar.zst
       members:
@@ -36,14 +37,17 @@ artifacts:
     role: release_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/drugcentral/1.0.2/release-metadata.json']
     size: 693
+    sha256: 3d592ec7ad95970fd6e493b199bddd3491b493ac0dce36d20358cd6395cde818
   - path: graph-metadata.json
     role: graph_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/drugcentral/1.0.2/graph-metadata.json']
     size: 52641
+    sha256: a2bf9150a8067ac60cf0a9bc85c656fb0bdc9ed42a4cc1e07aa2dbea0b6fabd6
   - path: test-data.json
     role: test_data
     urls: ['https://kgx-storage.ci.transltr.io/releases/drugcentral/1.0.2/test-data.json']
     size: 16055
+    sha256: c4599e329b39584e1f0d20f1a0711bf7521c78eda89ab94f9590c6ede3011d56
 mapping:
   options:
     upstream_conflated: true

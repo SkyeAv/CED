@@ -20,6 +20,7 @@ artifacts:
     role: kgx_archive
     urls: ['https://kgx-storage.ci.transltr.io/releases/ubergraph/1.0.4/ubergraph.tar.zst']
     size: 398820879
+    sha256: 8146aea5334aaa57f620d669f2eade8dde66033032453ba4345a602bab060435
     archive:
       format: tar.zst
       members:
@@ -32,14 +33,17 @@ artifacts:
     role: release_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/ubergraph/1.0.4/release-metadata.json']
     size: 705
+    sha256: d82a79fd5338e5450a70a84a61d175fd7750263c283df0a46580da124d08b73c
   - path: graph-metadata.json
     role: graph_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/ubergraph/1.0.4/graph-metadata.json']
     size: 71529
+    sha256: f4c7c99eac412f3e76c1cfd8384dd0f65c8b28a241a8a5c78d141050c55cc959
   - path: test-data.json
     role: test_data
     urls: ['https://kgx-storage.ci.transltr.io/releases/ubergraph/1.0.4/test-data.json']
     size: 14652
+    sha256: eb769b1a1b5c4b80bb1b2e642629ca93d65ef4d1b391016c927095349d18c98e
 mapping:
   options:
     upstream_conflated: true

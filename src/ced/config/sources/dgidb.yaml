@@ -19,6 +19,7 @@ artifacts:
     role: kgx_archive
     urls: ['https://kgx-storage.ci.transltr.io/releases/dgidb/1.0.3/dgidb.tar.zst']
     size: 4584342
+    sha256: 32147d78ea8a8de238af9760fcaf9907be6b603e950a98e29473fd980cd14513
     archive:
       format: tar.zst
       members:
@@ -31,14 +32,17 @@ artifacts:
     role: release_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/dgidb/1.0.3/release-metadata.json']
     size: 687
+    sha256: 350a0f2af59c5144f5426db4ab53676c2d66fa4e66de017333a7fb89dc5649d0
   - path: graph-metadata.json
     role: graph_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/dgidb/1.0.3/graph-metadata.json']
     size: 52183
+    sha256: 2180da1148f908424cce03ab5f934e5ceff75ecc2a0e8b79084ad673a851a6af
   - path: test-data.json
     role: test_data
     urls: ['https://kgx-storage.ci.transltr.io/releases/dgidb/1.0.3/test-data.json']
     size: 12845
+    sha256: 4a7e9cf120c9c0441b62f707582380f9d231e767fc4d9914191a70e662843fd3
 mapping:
   options:
     upstream_conflated: true

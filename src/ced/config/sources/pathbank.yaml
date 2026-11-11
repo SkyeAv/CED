@@ -25,6 +25,7 @@ artifacts:
     role: kgx_archive
     urls: ['https://kgx-storage.ci.transltr.io/releases/pathbank/1.0.2/pathbank.tar.zst']
     size: 50612176
+    sha256: 64b35cf0dfdd3228469e5dc5af54e80772c1c0e05b867b3b73b73bb15ab3c8e6
     archive:
       format: tar.zst
       members:
@@ -37,14 +38,17 @@ artifacts:
     role: release_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/pathbank/1.0.2/release-metadata.json']
     size: 702
+    sha256: 31e0eac27a1d6f81218281dae9899bca04893f2346b59879b61fa6e7422416c7
   - path: graph-metadata.json
     role: graph_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/pathbank/1.0.2/graph-metadata.json']
     size: 18016
+    sha256: a42a6d79df0415ada45d2e96823f1b4f18668766019334ba90ad95a6917e51ca
   - path: test-data.json
     role: test_data
     urls: ['https://kgx-storage.ci.transltr.io/releases/pathbank/1.0.2/test-data.json']
     size: 4189
+    sha256: a3f66707a94b71cb7972993e74ef095435768f803d6d8294112f312e46c44fe2
 mapping:
   options:
     upstream_conflated: true

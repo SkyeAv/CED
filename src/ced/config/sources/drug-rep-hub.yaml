@@ -20,6 +20,7 @@ artifacts:
     role: kgx_archive
     urls: ['https://kgx-storage.ci.transltr.io/releases/drug_rep_hub/1.0.2/drug_rep_hub.tar.zst']
     size: 2015825
+    sha256: c2fd2c850f1cc02d92415fac47417bf57a1d40ba5fe1259080ef73dd8e52274e
     archive:
       format: tar.zst
       members:
@@ -32,14 +33,17 @@ artifacts:
     role: release_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/drug_rep_hub/1.0.2/release-metadata.json']
     size: 714
+    sha256: 3e39b2e4ef25abbd95bcf56a5e15ec6b3b34636f2eaaf34bb6357caa428f9ed5
   - path: graph-metadata.json
     role: graph_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/drug_rep_hub/1.0.2/graph-metadata.json']
     size: 48711
+    sha256: 246ce2abf62fb6c334d41fb65879e8acc5b3422dbf9a29fdec29316b7a7fa16c
   - path: test-data.json
     role: test_data
     urls: ['https://kgx-storage.ci.transltr.io/releases/drug_rep_hub/1.0.2/test-data.json']
     size: 11074
+    sha256: 58cf264cdcca7f056a17daee315892104095729c3006a709e0b5b283d79af886
 mapping:
   options:
     upstream_conflated: true

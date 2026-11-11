@@ -19,6 +19,7 @@ artifacts:
     role: kgx_archive
     urls: ['https://kgx-storage.ci.transltr.io/releases/ncbi_gene/1.0.5/ncbi_gene.tar.zst']
     size: 6567934
+    sha256: 3e6c667e5314cd9ebe0d476466f7d735b511c84240e28f1e2381124678a1b097
     archive:
       format: tar.zst
       # The ncbi_gene release ships nodes.jsonl only: it is a gene catalog knowledge provider with
@@ -32,14 +33,17 @@ artifacts:
     role: release_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/ncbi_gene/1.0.5/release-metadata.json']
     size: 705
+    sha256: 129fd7b1ab57659f414b6c78d84bd4b51262317964dd7ba3510d62aa94de8d96
   - path: graph-metadata.json
     role: graph_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/ncbi_gene/1.0.5/graph-metadata.json']
     size: 2075
+    sha256: 7abc9a5bfd01e08046668109b0fc1ca5b611db77e8e6251e03cb0f950ff00099
   - path: test-data.json
     role: test_data
     urls: ['https://kgx-storage.ci.transltr.io/releases/ncbi_gene/1.0.5/test-data.json']
     size: 2
+    sha256: 4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945
 mapping:
   options:
     upstream_conflated: true

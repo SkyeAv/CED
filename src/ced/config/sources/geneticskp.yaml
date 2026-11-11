@@ -1,7 +1,9 @@
 # License evidence: translator-ingests geneticskp_rig.yaml records that MAGMA is freely
 # available for academic use and that commercial use requires contacting the developers.
 # The infores registry lists this provider as infores:genetics-data-provider, while the
-# producer RIG emits infores:geneticskp; CED records what the producer emits.
+# producer RIG emits infores:geneticskp; CED records what the producer emits. Confirmed against
+# the fetched 1.0.6 release: every sampled edge carries sources[].resource_id infores:geneticskp
+# with resource_role primary_knowledge_source.
 schema_version: 1
 name: geneticskp
 enabled: true
@@ -28,6 +30,7 @@ artifacts:
     role: kgx_archive
     urls: ['https://kgx-storage.ci.transltr.io/releases/geneticskp/1.0.6/geneticskp.tar.zst']
     size: 18346075
+    sha256: 3442550068065d68cb490aee7bb3a5360fd3d744df6a8d8877c088a026098b1c
     archive:
       format: tar.zst
       members:
@@ -40,14 +43,17 @@ artifacts:
     role: release_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/geneticskp/1.0.6/release-metadata.json']
     size: 708
+    sha256: 1f21668a609c74e4a7cf073d96c119e919d428113b886baac9845ac0adcef851
   - path: graph-metadata.json
     role: graph_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/geneticskp/1.0.6/graph-metadata.json']
     size: 23965
+    sha256: e164eec29a35e85835d4437172b6fa4125d4d83bd5db40826fb86a4f9ca84907
   - path: test-data.json
     role: test_data
     urls: ['https://kgx-storage.ci.transltr.io/releases/geneticskp/1.0.6/test-data.json']
     size: 5701
+    sha256: 3e5d9bc0847408117576f3d90d1e70c4609e23000782af4c216bfbe4c438bba3
 mapping:
   options:
     upstream_conflated: true

@@ -19,6 +19,7 @@ artifacts:
     role: kgx_archive
     urls: ['https://kgx-storage.ci.transltr.io/releases/bindingdb/1.0.2/bindingdb.tar.zst']
     size: 130570366
+    sha256: a886113e6752f8a36207618aff5e83373acddacf182f646795ca07cdfa5aa6e5
     archive:
       format: tar.zst
       members:
@@ -31,14 +32,17 @@ artifacts:
     role: release_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/bindingdb/1.0.2/release-metadata.json']
     size: 697
+    sha256: 2f32ea36f723266cb3e3b7cd1862efebf47a84b33d0ca4650e6b45c02009cfe3
   - path: graph-metadata.json
     role: graph_metadata
     urls: ['https://kgx-storage.ci.transltr.io/releases/bindingdb/1.0.2/graph-metadata.json']
     size: 13279
+    sha256: ad639ade0f5ae8c0c020ef98066faeaf09946f6c8f4eb12b2e4e3518f0f7a25f
   - path: test-data.json
     role: test_data
     urls: ['https://kgx-storage.ci.transltr.io/releases/bindingdb/1.0.2/test-data.json']
     size: 2063
+    sha256: 25c52840546a79400d9a173a629c074444418675aef36c53862f8a317df6ad23
 mapping:
   options:
     upstream_conflated: true
