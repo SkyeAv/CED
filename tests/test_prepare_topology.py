@@ -125,9 +125,10 @@ def test_prepare_dataset_streams_topology_and_features(tmp_path: Path, monkeypat
 
     assert set(manifest["tensors"]) == {"head", "tail", "relation_id", "split", "type_set_id"}
     for name, reference in manifest["tensors"].items():
-        assert reference["format"] == "parquet", name
+        assert reference["path"].endswith(".parquet"), name
     assert not (dataset / "split-records.ndjson").exists()
-    assert not (dataset / "edge_index.npy").exists()
+    suffixes = {path.suffix for path in dataset.rglob("*") if path.is_file() and path.name != "manifest.json"}
+    assert suffixes <= {".parquet", ".json"}
     validate_checksums(dataset, manifest["checksums"])
     for name, reference in manifest["tensors"].items():
         loaded = TensorRef.model_validate(reference).load(dataset)
@@ -302,7 +303,7 @@ def test_prepare_dataset_emits_ordered_feature_store(tmp_path: Path, monkeypatch
 
     categorical = features["categorical"]
     for name, reference in categorical.items():
-        assert reference["format"] == "parquet", name
+        assert reference["path"].endswith(".parquet"), name
         assert reference["dtype"] == "int64", name
     assert categorical["owner_id"]["path"] == "categorical.parquet"
     assert categorical["indptr"]["path"] == "categorical-indptr.parquet"

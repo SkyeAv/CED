@@ -111,4 +111,4 @@ Sentence Transformers support is optional and centralized in `src/ced/model/enco
 
 ## Development
 
-Keep code typed, concise, Ruff-formatted, and Pyright-clean. Use PyTorch for model and matrix math. NumPy is limited to `.npy` memmap serialization and DuckDB/Arrow handoff, with conversion to Torch tensors before computation. Tests must remain offline and hermetic unless explicitly marked and approved.
+Keep code typed, concise, Ruff-formatted, and Pyright-clean. Use PyTorch for model and matrix math. NumPy and Arrow handle in-memory arrays and DuckDB handoff, with conversion to Torch tensors before computation. Every persisted tensor is a Parquet column written by a streaming DuckDB `COPY` and read back through `TensorRef`; preparation never memory-maps or iterates per statement. Tests must remain offline and hermetic unless explicitly marked and approved.

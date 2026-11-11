@@ -200,7 +200,6 @@ class TextEmbeddingCache:
                 TensorRef(
                     path=str(path),
                     column="value",
-                    format="parquet",
                     dtype="float32",
                     shape=[int(part["rows"]), dimension],
                     sha256=sha256_file(path),

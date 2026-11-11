@@ -53,9 +53,6 @@ class SplitRecord(ConfigBase):
     split: Literal["train", "validation", "test", "schema"]
 
 
-TensorFormat = Literal["npy", "parquet"]
-
-
 class TensorRef(ConfigBase):
     """One tensor inside a dataset artifact.
 
@@ -66,29 +63,19 @@ class TensorRef(ConfigBase):
 
     path: str
     column: str = DEFAULT_COLUMN
-    format: TensorFormat = "npy"
     dtype: str = Field(pattern=r"^(int64|float32|bool|int8)$")
     shape: list[int]
     sha256: str
 
     def load(self, root: Path) -> np.ndarray:
-        """Return the tensor as an owned C-contiguous array, validating the file."""
-        validate_checksums(root, {self.path: self.sha256})
-        values = self._read(root / self.path)
-        if values.dtype != np.dtype(self.dtype) or list(values.shape) != self.shape:
-            raise ValueError(f"tensor shape/dtype mismatch: {self.path}")
-        if not values.flags.c_contiguous:
-            raise ValueError(f"noncontiguous tensor: {self.path}")
-        return values
+        """Return the tensor as an owned C-contiguous array.
 
-    def _read(self, path: Path) -> np.ndarray:
-        if self.format == "parquet":
-            return read_tensor(path, column=self.column, dtype=self.dtype, shape=self.shape)
-        if self.format == "npy":
-            if not path.is_file():
-                raise FileNotFoundError(f"dataset tensor is missing: {self.path}")
-            return np.load(path, allow_pickle=False)
-        raise ValueError(f"unsupported tensor format: {self.format}")
+        `read_tensor` enforces the checksum, dtype, null freedom, element count and
+        contiguity, so a mismatched or truncated artifact raises instead of being
+        silently reshaped into wrong indices.
+        """
+        validate_checksums(root, {self.path: self.sha256})
+        return read_tensor(root / self.path, column=self.column, dtype=self.dtype, shape=self.shape)
 
 
 class TextRecord(ConfigBase):

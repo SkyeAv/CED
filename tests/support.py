@@ -50,7 +50,6 @@ def synthetic_dataset(root: Path, *, batches: int = 3, nodes_per_batch: int = 64
         return TensorRef(
             path="topology.parquet",
             column=column,
-            format="parquet",
             dtype=dtype,
             shape=[statements],
             sha256=topology_digest,
@@ -64,7 +63,6 @@ def synthetic_dataset(root: Path, *, batches: int = 3, nodes_per_batch: int = 64
         "type_set_id": TensorRef(
             path="entities.parquet",
             column="type_set_id",
-            format="parquet",
             dtype="int64",
             shape=[statements],
             sha256=entities_digest,

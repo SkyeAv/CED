@@ -51,17 +51,6 @@ def test_negatives_use_global_ids_and_filter_all_positives() -> None:
             assert t >= 12
 
 
-def test_tensor_ref_checks_actual_dtype_shape_and_hash(tmp_path: Path) -> None:
-    ref = save_tensor(tmp_path, "ids", np.array([1, 2], dtype=np.int64))
-    assert ref.load(tmp_path).tolist() == [1, 2]
-    bad = ref.model_copy(update={"shape": [3]})
-    with pytest.raises(ValueError, match="shape/dtype"):
-        bad.load(tmp_path)
-    np.save(tmp_path / ref.path, np.array([3, 4], dtype=np.int64))
-    with pytest.raises(ValueError, match="checksum mismatch"):
-        ref.load(tmp_path)
-
-
 @pytest.mark.parametrize(
     ("dtype", "values"),
     [
@@ -72,14 +61,17 @@ def test_tensor_ref_checks_actual_dtype_shape_and_hash(tmp_path: Path) -> None:
     ],
 )
 def test_parquet_tensor_ref_round_trips_every_supported_dtype(tmp_path: Path, dtype: str, values: np.ndarray) -> None:
-    """Parquet is the replacement for .npy, so every model dtype must survive it exactly.
+    """Parquet is the only tensor encoding, so every model dtype must survive it exactly.
 
     Why: a dtype that silently widens, changes signedness or decodes nulls as zeros
     would corrupt entity indices and feature values long after preparation finished,
     and nothing downstream re-checks the file.
     """
-    ref = save_tensor(tmp_path, "values", values, format="parquet")
-    assert ref.format == "parquet"
+    from ced.model.tensors import DEFAULT_COLUMN
+
+    ref = save_tensor(tmp_path, "values", values)
+    assert ref.path == "values.parquet"
+    assert ref.column == DEFAULT_COLUMN
     assert ref.dtype == dtype
     assert ref.shape == [3]
     assert (tmp_path / "values.parquet").is_file()
@@ -98,7 +90,7 @@ def test_parquet_tensor_ref_restores_multidimensional_shape(tmp_path: Path) -> N
     that covers every rank; getting it wrong would transpose message passing.
     """
     values = np.arange(6, dtype=np.int64).reshape(2, 3)
-    ref = save_tensor(tmp_path, "edge_index", values, format="parquet")
+    ref = save_tensor(tmp_path, "edge_index", values)
     assert ref.shape == [2, 3]
     loaded = ref.load(tmp_path)
     assert loaded.shape == (2, 3)
@@ -127,9 +119,7 @@ def test_parquet_tensor_refs_share_one_file_by_column(tmp_path: Path) -> None:
     digest = sha256_file(tmp_path / "topology.parquet")
 
     def ref(column: str) -> TensorRef:
-        return TensorRef(
-            path="topology.parquet", column=column, format="parquet", dtype="int64", shape=[2], sha256=digest
-        )
+        return TensorRef(path="topology.parquet", column=column, dtype="int64", shape=[2], sha256=digest)
 
     assert ref("head").load(tmp_path).tolist() == [0, 1]
     assert ref("tail").load(tmp_path).tolist() == [1, 0]
@@ -154,13 +144,12 @@ def test_parquet_tensor_ref_rejects_nulls_and_hash_mismatch(tmp_path: Path) -> N
     from ced.acquisition.base import sha256_file
     from ced.model.schemas import TensorRef
 
-    ref = save_tensor(tmp_path, "ids", np.array([1, 2], dtype=np.int64), format="parquet")
+    ref = save_tensor(tmp_path, "ids", np.array([1, 2], dtype=np.int64))
     assert ref.load(tmp_path).tolist() == [1, 2]
 
     pq.write_table(pa.table({"value": pa.array([1, None], pa.int64())}), tmp_path / "nulls.parquet", compression="zstd")
     nulls = TensorRef(
         path="nulls.parquet",
-        format="parquet",
         dtype="int64",
         shape=[2],
         sha256=sha256_file(tmp_path / "nulls.parquet"),
@@ -168,7 +157,7 @@ def test_parquet_tensor_ref_rejects_nulls_and_hash_mismatch(tmp_path: Path) -> N
     with pytest.raises(ValueError, match="contains nulls"):
         nulls.load(tmp_path)
 
-    save_tensor(tmp_path, "ids", np.array([3, 4], dtype=np.int64), format="parquet")
+    save_tensor(tmp_path, "ids", np.array([3, 4], dtype=np.int64))
     with pytest.raises(ValueError, match="checksum mismatch"):
         ref.load(tmp_path)
 

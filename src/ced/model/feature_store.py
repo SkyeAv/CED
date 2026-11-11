@@ -40,7 +40,6 @@ def write_indptr(connection: duckdb.DuckDBPyConnection, source: Path, owners: in
     return TensorRef(
         path=destination.name,
         column="value",
-        format="parquet",
         dtype="int64",
         shape=[owners + 1],
         sha256=sha256_file(destination),
@@ -109,7 +108,6 @@ def prepare_features(
         return TensorRef(
             path="categorical.parquet",
             column=column,
-            format="parquet",
             dtype="int64",
             shape=[categorical_rows[0]],
             sha256=categorical_digest,
@@ -130,7 +128,6 @@ def prepare_features(
         return TensorRef(
             path="numeric.parquet",
             column=column,
-            format="parquet",
             dtype=dtype,
             shape=[numeric_rows[0]],
             sha256=numeric_digest,

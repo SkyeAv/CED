@@ -12,27 +12,19 @@ from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.config.models import RuntimeConfig
 from ced.kg.audit import validate_checksums
 from ced.model.feature_store import prepare_features
-from ced.model.schemas import DatasetManifest, TensorFormat, TensorRef, VocabularyArtifact
+from ced.model.schemas import DatasetManifest, TensorRef, VocabularyArtifact
 from ced.model.shards import write_batch_shards
 from ced.model.split import split_bounds
 from ced.model.tensors import write_tensor
 from ced.preflight import require_cpu_worker, require_disk
 
 
-def save_tensor(root: Path, name: str, values: np.ndarray, *, format: TensorFormat = "npy") -> TensorRef:
-    """Serialize one in-memory tensor and return its manifest reference."""
+def save_tensor(root: Path, name: str, values: np.ndarray) -> TensorRef:
+    """Serialize one in-memory tensor to Parquet and return its manifest reference."""
     array = np.ascontiguousarray(values)
-    if format == "parquet":
-        path = root / f"{name}.parquet"
-        write_tensor(path, array)
-    elif format == "npy":
-        path = root / f"{name}.npy"
-        np.save(path, array, allow_pickle=False)
-    else:
-        raise ValueError(f"unsupported tensor format: {format}")
-    return TensorRef(
-        path=path.name, format=format, dtype=str(array.dtype), shape=list(array.shape), sha256=sha256_file(path)
-    )
+    path = root / f"{name}.parquet"
+    write_tensor(path, array)
+    return TensorRef(path=path.name, dtype=str(array.dtype), shape=list(array.shape), sha256=sha256_file(path))
 
 
 def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
@@ -81,8 +73,8 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
         train_bound, valid_bound = split_bounds(runtime.split)
         seed = str(runtime.split.seed)
         # One streaming COPY replaces the per-row Python loop and its write-mode
-        # memmaps. group_id and split are computed in SQL; the split CASE is pinned
-        # to the Python reference by tests/test_prepare_topology.py.
+        # array files. group_id and split are computed in SQL; the split CASE is
+        # pinned to the Python reference by tests/test_prepare_topology.py.
         connection.execute(
             """COPY (
                 SELECT row_number() OVER (ORDER BY g.id) - 1 AS index, g.id AS statement_id, g.group_id,
@@ -113,7 +105,6 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
             "head": TensorRef(
                 path="topology.parquet",
                 column="head",
-                format="parquet",
                 dtype="int64",
                 shape=[total],
                 sha256=sha256_file(root / "topology.parquet"),
@@ -121,7 +112,6 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
             "tail": TensorRef(
                 path="topology.parquet",
                 column="tail",
-                format="parquet",
                 dtype="int64",
                 shape=[total],
                 sha256=sha256_file(root / "topology.parquet"),
@@ -129,7 +119,6 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
             "relation_id": TensorRef(
                 path="topology.parquet",
                 column="relation_id",
-                format="parquet",
                 dtype="int64",
                 shape=[total],
                 sha256=sha256_file(root / "topology.parquet"),
@@ -137,7 +126,6 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
             "split": TensorRef(
                 path="topology.parquet",
                 column="split",
-                format="parquet",
                 dtype="int8",
                 shape=[total],
                 sha256=sha256_file(root / "topology.parquet"),
@@ -145,7 +133,6 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
             "type_set_id": TensorRef(
                 path="entities.parquet",
                 column="type_set_id",
-                format="parquet",
                 dtype="int64",
                 shape=[counts["nodes"]],
                 sha256=sha256_file(root / "entities.parquet"),
