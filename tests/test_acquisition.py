@@ -198,8 +198,22 @@ def test_archive_rejects_links(tmp_path: Path) -> None:
     archive = tmp_path / "fixture.tar.zst"
     make_archive(archive, symlink=True)
     spec = ArchiveSpec(format="tar.zst", members={"nodes": ["nodes.ndjson"], "edges": ["edges.ndjson"]})
-    with pytest.raises(RuntimeError, match="safe archive extraction failed"):
+    with pytest.raises(RuntimeError, match=r"safe archive extraction of fixture\.tar\.zst failed") as failure:
         extract_archive(archive, spec, tmp_path / "bad")
+    assert isinstance(failure.value.__cause__, ValueError)
+    assert "archive links/devices are forbidden" in str(failure.value)
+
+
+def test_archive_names_roles_whose_patterns_match_nothing(tmp_path: Path) -> None:
+    """The real Translator releases ship nodes.jsonl, so a stale *.ndjson pattern matched nothing;
+    the failure has to name the unmatched role and the archive instead of hiding the cause."""
+    archive = tmp_path / "fixture.tar.zst"
+    make_archive(archive)
+    spec = ArchiveSpec(format="tar.zst", members={"nodes": ["*.jsonl"], "edges": ["edges.ndjson"]})
+    with pytest.raises(RuntimeError, match=r"safe archive extraction of fixture\.tar\.zst failed") as failure:
+        extract_archive(archive, spec, tmp_path / "missing")
+    assert "archive roles have no members: nodes" in str(failure.value)
+    assert (tmp_path / "missing").exists() is False
 
 
 def test_large_download_requires_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

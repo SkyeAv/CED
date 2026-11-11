@@ -21,9 +21,10 @@ artifacts:
     size: 6567934
     archive:
       format: tar.zst
+      # The ncbi_gene release ships nodes.jsonl only: it is a gene catalog knowledge provider with
+      # no statements, so declaring an edges role would fail extraction with no members to match.
       members:
         nodes: ['*nodes*.jsonl', '*nodes*.ndjson']
-        edges: ['*edges*.jsonl', '*edges*.ndjson']
       max_members: 16
       max_member_bytes: 1073741824
       max_total_bytes: 1073741824

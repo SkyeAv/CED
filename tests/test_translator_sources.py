@@ -23,6 +23,8 @@ TRANSLATOR = {
     "panther": "panther/1.0.2",
     "pathbank": "pathbank/1.0.2",
 }
+# ncbi_gene is a gene catalog: its release archive contains nodes.jsonl and no edge file.
+NODES_ONLY = {"ncbi-gene"}
 
 
 @pytest.fixture(scope="module")
@@ -82,9 +84,10 @@ def test_archive_declares_nodes_and_edges_with_expanded_caps(catalog) -> None:
         archive = archives[0].archive
         assert archive is not None
         assert archive.format == "tar.zst"
-        assert set(archive.members) == {"nodes", "edges"}
+        assert set(archive.members) == ({"nodes"} if name in NODES_ONLY else {"nodes", "edges"})
         assert archive.members["nodes"] == ["*nodes*.jsonl", "*nodes*.ndjson"]
-        assert archive.members["edges"] == ["*edges*.jsonl", "*edges*.ndjson"]
+        if name not in NODES_ONLY:
+            assert archive.members["edges"] == ["*edges*.jsonl", "*edges*.ndjson"]
         assert archive.max_members >= 2
         assert archive.max_total_bytes >= archive.max_member_bytes > archives[0].size
         assert archives[0].size == max(artifact.size or 0 for artifact in catalog[name].artifacts)
