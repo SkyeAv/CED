@@ -1,0 +1,53 @@
+# License evidence: translator-ingests geneticskp_rig.yaml records that MAGMA is freely
+# available for academic use and that commercial use requires contacting the developers.
+# The infores registry lists this provider as infores:genetics-data-provider, while the
+# producer RIG emits infores:geneticskp; CED records what the producer emits.
+schema_version: 1
+name: geneticskp
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: Genetics KP Translator KGX
+  description: MAGMA gene-level GWAS associations from the Genetics KP, Translator release 1.0.6, conflated.
+  homepage: https://kgx-storage.ci.transltr.io/releases/geneticskp/1.0.6/
+  license_name: 'Freely available for academic use (MAGMA)'
+  license_url: https://github.com/broadinstitute/genetics-kp-dev
+  provided_by: infores:geneticskp
+  citations:
+    [
+      'Genetics KP source version 2026-10-18',
+      'Translator release 1.0.6',
+      'https://github.com/broadinstitute/genetics-kp-dev'
+    ]
+artifacts:
+  - path: geneticskp.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/geneticskp/1.0.6/geneticskp.tar.zst']
+    size: 18346075
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.ndjson']
+        edges: ['*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 1073741824
+      max_total_bytes: 1073741824
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/geneticskp/1.0.6/release-metadata.json']
+    size: 708
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/geneticskp/1.0.6/graph-metadata.json']
+    size: 23965
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/geneticskp/1.0.6/test-data.json']
+    size: 5701
+mapping:
+  options:
+    upstream_conflated: true

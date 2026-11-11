@@ -1,0 +1,49 @@
+schema_version: 1
+name: drugcentral
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: DrugCentral Translator KGX
+  description: DrugCentral drug facts and approvals, Translator release 1.0.2 with strict conflated normalization.
+  homepage: https://kgx-storage.ci.transltr.io/releases/drugcentral/1.0.2/
+  license_name: 'CC-BY-SA-4.0'
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/legalcode
+  provided_by: infores:drugcentral
+  citations:
+    [
+      'DrugCentral source version 2023_11_01',
+      'Translator release 1.0.2',
+      'https://pmc.ncbi.nlm.nih.gov/articles/PMC10939799/'
+    ]
+artifacts:
+  - path: drugcentral.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/drugcentral/1.0.2/drugcentral.tar.zst']
+    size: 2423293
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.ndjson']
+        edges: ['*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 536870912
+      max_total_bytes: 536870912
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/drugcentral/1.0.2/release-metadata.json']
+    size: 693
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/drugcentral/1.0.2/graph-metadata.json']
+    size: 52641
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/drugcentral/1.0.2/test-data.json']
+    size: 16055
+mapping:
+  options:
+    upstream_conflated: true

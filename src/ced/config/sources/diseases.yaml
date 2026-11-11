@@ -1,0 +1,45 @@
+schema_version: 1
+name: diseases
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: DISEASES Translator KGX
+  description: JensenLab DISEASES gene-disease associations, Translator release 1.0.5, conflated normalization.
+  homepage: https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/
+  license_name: 'CC-BY-4.0'
+  license_url: https://creativecommons.org/licenses/by/4.0/
+  provided_by: infores:diseases
+  citations:
+    ['DISEASES source version 2026_10_16', 'Translator release 1.0.5', 'https://doi.org/10.1093/database/baac019']
+artifacts:
+  - path: diseases.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/diseases.tar.zst']
+    size: 453772
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.ndjson']
+        edges: ['*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 268435456
+      max_total_bytes: 268435456
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/release-metadata.json']
+    size: 702
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/graph-metadata.json']
+    size: 5806
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/test-data.json']
+    size: 489
+mapping:
+  options:
+    upstream_conflated: true

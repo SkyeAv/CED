@@ -1,0 +1,50 @@
+schema_version: 1
+name: pathbank
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: PathBank Translator KGX
+  description: PathBank pathways; ODbL plus author permission required for commercial redistribution.
+  homepage: https://kgx-storage.ci.transltr.io/releases/pathbank/1.0.2/
+  license_name: 'ODbL-1.0'
+  license_url: https://opendatacommons.org/licenses/odbl/
+  provided_by: infores:pathbank
+  citations:
+    [
+      'PathBank source version 2019-09-13',
+      'Translator release 1.0.2',
+      'https://doi.org/10.1093/nar/gkz861',
+      'https://doi.org/10.1093/nar/gkad1041'
+    ]
+artifacts:
+  - path: pathbank.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/pathbank/1.0.2/pathbank.tar.zst']
+    size: 50612176
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.ndjson']
+        edges: ['*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 2147483648
+      max_total_bytes: 2147483648
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/pathbank/1.0.2/release-metadata.json']
+    size: 702
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/pathbank/1.0.2/graph-metadata.json']
+    size: 18016
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/pathbank/1.0.2/test-data.json']
+    size: 4189
+mapping:
+  options:
+    upstream_conflated: true

@@ -1,0 +1,45 @@
+schema_version: 1
+name: drug-rep-hub
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: Drug Repurposing Hub Translator KGX
+  description: Broad Drug Repurposing Hub compound-target indications, Translator release 1.0.2, conflated.
+  homepage: https://kgx-storage.ci.transltr.io/releases/drug_rep_hub/1.0.2/
+  license_name: 'CC-BY-4.0'
+  license_url: https://creativecommons.org/licenses/by/4.0/
+  provided_by: infores:drug-repurposing-hub
+  citations:
+    ['Drug Repurposing Hub source version 2025-08-19', 'Translator release 1.0.2', 'https://doi.org/10.1038/nm.4306']
+artifacts:
+  - path: drug_rep_hub.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/drug_rep_hub/1.0.2/drug_rep_hub.tar.zst']
+    size: 2015825
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.ndjson']
+        edges: ['*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 536870912
+      max_total_bytes: 536870912
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/drug_rep_hub/1.0.2/release-metadata.json']
+    size: 714
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/drug_rep_hub/1.0.2/graph-metadata.json']
+    size: 48711
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/drug_rep_hub/1.0.2/test-data.json']
+    size: 11074
+mapping:
+  options:
+    upstream_conflated: true

@@ -1,0 +1,44 @@
+schema_version: 1
+name: ncbi-gene
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: NCBI Gene Translator KGX
+  description: NCBI Gene identifiers, symbols and descriptions, Translator release 1.0.5, conflated normalization.
+  homepage: https://kgx-storage.ci.transltr.io/releases/ncbi_gene/1.0.5/
+  license_name: 'NCBI Public Domain'
+  license_url: https://www.ncbi.nlm.nih.gov/home/about/policies/
+  provided_by: infores:ncbi-gene
+  citations: ['NCBI Gene source version 2026_10_17', 'Translator release 1.0.5', 'https://www.ncbi.nlm.nih.gov/gene']
+artifacts:
+  - path: ncbi_gene.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/ncbi_gene/1.0.5/ncbi_gene.tar.zst']
+    size: 6567934
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.ndjson']
+        edges: ['*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 1073741824
+      max_total_bytes: 1073741824
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/ncbi_gene/1.0.5/release-metadata.json']
+    size: 705
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/ncbi_gene/1.0.5/graph-metadata.json']
+    size: 2075
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/ncbi_gene/1.0.5/test-data.json']
+    size: 2
+mapping:
+  options:
+    upstream_conflated: true

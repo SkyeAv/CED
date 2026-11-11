@@ -1,0 +1,50 @@
+schema_version: 1
+name: gene2phenotype
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: Gene2Phenotype Translator KGX
+  description: EBI Gene2Phenotype gene-disease panels, Translator release 1.0.6, strict conflated normalization.
+  homepage: https://kgx-storage.ci.transltr.io/releases/gene2phenotype/1.0.6/
+  license_name: 'EMBL-EBI Terms of Use'
+  license_url: https://www.ebi.ac.uk/about/terms-of-use/#general
+  provided_by: infores:gene2phenotype
+  citations:
+    [
+      'Gene2Phenotype source version 2026_10_18',
+      'Translator release 1.0.6',
+      'https://doi.org/10.1016/j.jmb.2026.169768',
+      'https://doi.org/10.1186/s13073-024-01398-1'
+    ]
+artifacts:
+  - path: gene2phenotype.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/gene2phenotype/1.0.6/gene2phenotype.tar.zst']
+    size: 657952
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.ndjson']
+        edges: ['*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 268435456
+      max_total_bytes: 268435456
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/gene2phenotype/1.0.6/release-metadata.json']
+    size: 720
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/gene2phenotype/1.0.6/graph-metadata.json']
+    size: 7078
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/gene2phenotype/1.0.6/test-data.json']
+    size: 1118
+mapping:
+  options:
+    upstream_conflated: true

@@ -2,17 +2,18 @@ schema_version: 1
 name: chembl
 enabled: true
 adapter: kgx_ndjson
+groups: [translator]
 acquisition:
-  backend: aria2
+  backend: http
   connections: 8
 provenance:
-  title: ChEMBL 36 Translator KGX
+  title: ChEMBL Translator KGX
   description: Translator Ingests ChEMBL release 1.0.2 with strict conflated normalization.
   homepage: https://kgx-storage.ci.transltr.io/releases/chembl/1.0.2/
-  license_name: CC-BY-SA-3.0
+  license_name: 'CC-BY-SA-3.0'
   license_url: https://creativecommons.org/licenses/by-sa/3.0/
   provided_by: infores:chembl
-  citations: ['ChEMBL source version 36', 'Translator release 1.0.2']
+  citations: ['ChEMBL source version 36', 'Translator release 1.0.2', 'https://doi.org/10.1093/nar/gkad1004']
 artifacts:
   - path: chembl.tar.zst
     role: kgx_archive
