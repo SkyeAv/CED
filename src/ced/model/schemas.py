@@ -47,12 +47,6 @@ class FeatureFieldSpec(ConfigBase):
     missing_id: int = 1
 
 
-class SplitRecord(ConfigBase):
-    statement_id: str
-    group_id: str
-    split: Literal["train", "validation", "test", "schema"]
-
-
 class TensorRef(ConfigBase):
     """One tensor inside a dataset artifact.
 

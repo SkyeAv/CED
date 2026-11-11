@@ -30,9 +30,17 @@ def split_bounds(settings: SplitSettings) -> tuple[str, str]:
     DuckDB compares the first 16 hex characters of ``sha256(seed\0group)`` as a
     UBIGINT, so the thresholds are bound as hex strings; the integers exceed
     BIGINT and cannot be passed as Python integers.
+
+    Both bounds are clamped to the largest representable digest because
+    ``test = 0`` makes ``train + validation`` exactly 1.0, whose unclamped bound is
+    ``2**64``. That needs 17 hex digits and overflows the UBIGINT cast, so SQL
+    would abort preparation while Python kept working. ``group_split`` derives its
+    integers from this function, so clamping here keeps the two engines in exact
+    agreement; it can only move the single digest ``2**64 - 1``.
     """
-    train_bound = int(Fraction(settings.train) * 2**64)
-    valid_bound = int(Fraction(settings.train + settings.validation) * 2**64)
+    largest = 2**64 - 1
+    train_bound = min(int(Fraction(settings.train) * 2**64), largest)
+    valid_bound = min(int(Fraction(settings.train + settings.validation) * 2**64), largest)
     return format(train_bound, "x"), format(valid_bound, "x")
 
 

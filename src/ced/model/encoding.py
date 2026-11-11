@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any, Protocol
@@ -124,19 +125,26 @@ class TextEmbeddingCache:
         return json.loads(self.manifest_path.read_text())
 
     def create_index(self, connection: duckdb.DuckDBPyConnection) -> None:
-        """Expose the sha -> row map as a temp table without loading it into Python.
+        """Expose the sha -> row map for the published parts as a temp table.
 
-        DuckDB cannot glob an empty directory, so a brand-new cache gets an empty
-        typed table instead of a failing `read_parquet` call.
+        Only parts listed in ``manifest.json`` are read. A crash between the index
+        part write and the manifest update leaves an orphan file whose rows were
+        never published; globbing the directory would treat those texts as cached
+        while ``part_refs`` omits their vectors, so a dataset would be written with
+        row ids that point at embeddings that do not exist. Ignoring orphans is also
+        what lets a crashed run self-heal, because the next append reuses the name.
+        Reading an explicit list also avoids DuckDB's failure on an empty glob.
         """
-        if any(self.index.glob("*.parquet")):
-            connection.execute(
-                f"""CREATE OR REPLACE TEMP TABLE cache_index AS
-                    SELECT text_sha256, min(row) AS row
-                    FROM read_parquet('{self.index / "*.parquet"}') GROUP BY text_sha256"""
-            )
-        else:
+        names = [str(part["name"]) for part in self.manifest()["parts"]]
+        if not names:
             connection.execute("CREATE OR REPLACE TEMP TABLE cache_index (text_sha256 VARCHAR, row BIGINT)")
+            return
+        listing = ", ".join(f"'{self.index / name}'" for name in names)
+        connection.execute(
+            f"""CREATE OR REPLACE TEMP TABLE cache_index AS
+                SELECT text_sha256, min(row) AS row
+                FROM read_parquet([{listing}]) GROUP BY text_sha256"""
+        )
 
     def append_stream(self, batches: Iterator[tuple[Sequence[str], Any]]) -> int:
         """Append encoded batches as new parts and return the number of rows added.
@@ -160,6 +168,9 @@ class TextEmbeddingCache:
             name = f"part-{len(parts):06d}.parquet"
             vectors = np.concatenate(pending) if len(pending) > 1 else pending[0]
             write_tensor(self.parts / name, vectors)
+            # Atomic like the vector part: a concurrent reader must never observe a
+            # half-written index, and a torn file stays an ignored orphan.
+            temporary = self.index / f"{name}.tmp-{os.getpid()}"
             pq.write_table(
                 pa.table(
                     {
@@ -167,9 +178,10 @@ class TextEmbeddingCache:
                         "row": pa.array(np.arange(row, row + pending_rows, dtype=np.int64)),
                     }
                 ),
-                self.index / name,
+                temporary,
                 compression="zstd",
             )
+            temporary.replace(self.index / name)
             parts.append({"name": name, "rows": pending_rows})
             row += pending_rows
             pending_keys, pending, pending_rows = [], [], 0
@@ -226,6 +238,8 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
     validate_checksums(root, manifest["checksums"])
     encoder = create_text_encoder(settings)
     cache = TextEmbeddingCache(runtime.artifact_path(str(settings.cache_subdirectory)), settings)
+    partial = root / "text-records.partial.parquet"
+    missing = root / "text-missing.partial.parquet"
     connection = duckdb.connect()
     try:
         connection.execute(f"SET threads={runtime.cpu_workers}")
@@ -242,11 +256,9 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
             JOIN read_parquet('{root}/topology.parquet') s ON f.owner_id=s.statement_id
             WHERE f.kind='text'"""
         query = common.format(f"{node_query} UNION ALL BY NAME {statement_query}")
-        partial = root / "text-records.partial.parquet"
         connection.execute(f"COPY ({query}) TO '{partial}' (FORMAT PARQUET, COMPRESSION ZSTD)")
 
         cache.create_index(connection)
-        missing = root / "text-missing.partial.parquet"
         connection.execute(
             f"""COPY (SELECT DISTINCT sha256(r.text) AS text_sha256, r.text
                       FROM read_parquet('{partial}') r
@@ -255,7 +267,6 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
                 TO '{missing}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
         )
         cache.append_stream(_encode_batches(missing, encoder, settings.batch_size))
-        missing.unlink()
         # Refresh the temp table: the append wrote a new index part that the table
         # built for the anti-join above does not contain.
         cache.create_index(connection)
@@ -272,7 +283,6 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
         resolved = pq.ParquetFile(index_path).metadata.num_rows
         if resolved != records:
             raise ValueError(f"{records - resolved} text records did not resolve to a cached embedding")
-        partial.unlink()
         store = DenseFeatureStore(
             provider=settings.provider,
             model=settings.model,
@@ -285,4 +295,7 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
         atomic_write_json(root / "text-features.json", store.model_dump(mode="json"))
         return store
     finally:
+        # A mid-run failure must not strand intermediates in the published dataset.
+        partial.unlink(missing_ok=True)
+        missing.unlink(missing_ok=True)
         connection.close()

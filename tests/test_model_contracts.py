@@ -454,3 +454,85 @@ def test_evaluation_supports_exact_and_sampled_ranking(tmp_path: Path, synthetic
     assert (
         evaluate_dataset(root, split="test", seed=3, device="cpu", ranking="sampled", sampled_candidates=2) == sampled
     )
+
+
+def test_split_bounds_stay_inside_ubigint_for_a_zero_test_split() -> None:
+    """A zero test split must not push the validation bound past UBIGINT range.
+
+    Why: `train + validation == 1.0` gives an unclamped bound of 2**64, which needs 17
+    hex digits. The SQL split CASE casts the hex string to UBIGINT, so preparation
+    would abort with a conversion error while the Python reference kept working. The
+    two engines would disagree in a way no user could diagnose from the message.
+    """
+    import duckdb
+
+    from ced.model.split import split_bounds
+
+    settings = SplitSettings(train=0.9, validation=0.1, test=0.0)
+    train_bound, valid_bound = split_bounds(settings)
+    assert len(train_bound) <= 16
+    assert len(valid_bound) <= 16
+
+    connection = duckdb.connect()
+    try:
+        cast = connection.execute("SELECT ('0x' || ?)::UBIGINT, ('0x' || ?)::UBIGINT", [train_bound, valid_bound])
+        bounds = cast.fetchone()
+    finally:
+        connection.close()
+    assert bounds is not None
+    assert bounds[1] == 2**64 - 1
+
+    groups = [statement_group(f"X:{i}", "p", f"Y:{i}") for i in range(500)]
+    assert {group_split(group, settings) for group in groups} <= {0, 1}
+    for train, validation, test in ((0.8, 0.1, 0.1), (0.7, 0.2, 0.1), (0.6, 0.2, 0.2)):
+        bounds = split_bounds(SplitSettings(train=train, validation=validation, test=test))
+        assert all(int(bound, 16) <= 2**64 - 1 for bound in bounds)
+
+
+def test_text_embedding_cache_ignores_unpublished_index_parts(tmp_path: Path) -> None:
+    """An index part missing from the manifest must not make its texts look cached.
+
+    Why: a crash between the index part write and the manifest update leaves exactly
+    such an orphan. If the sha -> row table included it, the anti-join would skip those
+    texts, no rows would be appended, and the emitted text index would carry row ids
+    past the end of the published vectors. Every consumer would then read the wrong
+    embedding, or none, without any error being raised.
+    """
+    pytest.importorskip("torch")
+    import duckdb
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from ced.config.models import TextEncodingSettings
+    from ced.model.encoding import RandomTextEncoder, TextEmbeddingCache, text_key
+
+    settings = TextEncodingSettings(provider="random", dimension=4, batch_size=2)
+    encoder = RandomTextEncoder(4, seed=11)
+    cache = TextEmbeddingCache(tmp_path, settings)
+
+    def batches(texts: list[str]):
+        return iter([(texts, encoder.encode(texts).detach().cpu().numpy())])
+
+    assert cache.append_stream(batches(["one"])) == 1
+
+    # Simulate the crash: a complete index part the manifest never learned about.
+    pq.write_table(
+        pa.table({"text_sha256": pa.array([text_key("ghost")], pa.string()), "row": pa.array([1], pa.int64())}),
+        cache.index / "part-000001.parquet",
+    )
+
+    def index_rows() -> dict[str, int]:
+        connection = duckdb.connect()
+        try:
+            cache.create_index(connection)
+            return dict(connection.execute("SELECT text_sha256, row FROM cache_index").fetchall())
+        finally:
+            connection.close()
+
+    assert index_rows() == {text_key("one"): 0}
+
+    # The next append reuses the orphan name, so the crash self-heals.
+    assert cache.append_stream(batches(["two"])) == 1
+    assert [part["name"] for part in cache.manifest()["parts"]] == ["part-000000.parquet", "part-000001.parquet"]
+    assert index_rows() == {text_key("one"): 0, text_key("two"): 1}
+    assert not list(cache.index.glob("*.tmp-*"))
