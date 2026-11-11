@@ -73,7 +73,9 @@ def test_artifacts_pin_an_exact_byte_size(catalog) -> None:
 
 def test_archive_declares_nodes_and_edges_with_expanded_caps(catalog) -> None:
     """The KGX adapter reads the extracted members by role, and the archive guard needs bounds
-    large enough for the real expansion (ubergraph is ~399 MiB compressed)."""
+    large enough for the real expansion (ubergraph is ~380 MiB compressed). Member patterns cover
+    both spellings because these releases ship `nodes.jsonl`/`edges.jsonl` while other producers
+    use `.ndjson`; a pattern that matches nothing fails the fetch with 'roles have no members'."""
     for name in TRANSLATOR:
         archives = [artifact for artifact in catalog[name].artifacts if artifact.archive is not None]
         assert len(archives) == 1, f"{name} must declare exactly one archive"
@@ -81,8 +83,8 @@ def test_archive_declares_nodes_and_edges_with_expanded_caps(catalog) -> None:
         assert archive is not None
         assert archive.format == "tar.zst"
         assert set(archive.members) == {"nodes", "edges"}
-        assert archive.members["nodes"] == ["*nodes*.ndjson"]
-        assert archive.members["edges"] == ["*edges*.ndjson"]
+        assert archive.members["nodes"] == ["*nodes*.jsonl", "*nodes*.ndjson"]
+        assert archive.members["edges"] == ["*edges*.jsonl", "*edges*.ndjson"]
         assert archive.max_members >= 2
         assert archive.max_total_bytes >= archive.max_member_bytes > archives[0].size
         assert archives[0].size == max(artifact.size or 0 for artifact in catalog[name].artifacts)

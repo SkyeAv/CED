@@ -23,8 +23,8 @@ artifacts:
     archive:
       format: tar.zst
       members:
-        nodes: ['*nodes*.ndjson']
-        edges: ['*edges*.ndjson']
+        nodes: ['*nodes*.jsonl', '*nodes*.ndjson']
+        edges: ['*edges*.jsonl', '*edges*.ndjson']
       max_members: 16
       max_member_bytes: 268435456
       max_total_bytes: 268435456
