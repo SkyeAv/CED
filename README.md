@@ -63,10 +63,12 @@ Generated data stays under `.ced/` on the remote worker:
   graphs/            # merged canonical graph snapshots
   datasets/          # split tensors, feature stores, batch shards, manifests
   runs/              # Modal checkpoints, metrics, progress, and recovered artifacts
-  text-embeddings/   # optional Sentence Transformers caches
+  text-embeddings/   # append-only Sentence Transformers caches: parts/ vectors plus index/ sha->row maps
 ```
 
 Every snapshot, graph, and dataset writes checksums. Preparation and Modal planning validate them before use.
+
+`scripts/bench_prepare.py` measures preparation on a synthetic snapshot (no download, no fullmap) and reports wall seconds plus peak RSS. It runs only on `wenceslaus` and is covered by `pytest -k bench`.
 
 ## Adding a source
 
