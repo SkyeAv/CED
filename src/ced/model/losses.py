@@ -45,24 +45,34 @@ class AuxiliaryAttributeDecoder(nn.Module):
     ) -> torch.Tensor:
         loss = states.sum() * 0
         used = torch.zeros_like(targets, dtype=torch.bool) if valid is None else valid.clone()
-        for field in torch.unique(fields).tolist():
+        # One host fetch for the present fields; for the masked numeric path one
+        # bincount replaces the historical per-field .any() host synchronization.
+        # Iteration order stays ascending by field id, preserving the loss
+        # accumulation order (and therefore CPU bitwise results).
+        present = torch.unique(fields).tolist()
+        counts: list[int] | None = None
+        if valid is not None:
+            masked = fields[valid]
+            counts = torch.bincount(masked).tolist() if masked.numel() else []
+        for field in present:
             head_index = index.get(int(field))
             if head_index is None:
+                continue
+            if counts is not None and (field >= len(counts) or counts[int(field)] == 0):
                 continue
             selected = fields == field
             if valid is not None:
                 selected &= valid
-            if not selected.any():
-                continue
             used |= selected
             prediction = heads[head_index](states[selected])
             if valid is None:
                 loss = loss + F.cross_entropy(prediction, targets[selected])
             else:
                 loss = loss + F.mse_loss(prediction.squeeze(-1), targets[selected])
-        if not used.any():
+        used_total = int(used.sum())
+        if used_total == 0:
             return states.sum() * 0
-        return loss / max(int(used.sum()), 1)
+        return loss / max(used_total, 1)
 
     def forward(
         self,

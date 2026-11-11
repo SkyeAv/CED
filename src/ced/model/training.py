@@ -129,8 +129,8 @@ def _auxiliary_tensors(
     empty_bool = torch.empty(0, dtype=torch.bool, device=state.device)
     if features is None or statements.numel() == 0:
         return state[:0], empty_long, empty_long, empty_long, empty_float, empty_bool
-    statement_owners = features.statement_owner(statements.cpu())
-    node_rows, node_fields, node_values = features.categorical_rows(global_nodes.cpu())
+    statement_owners = features.statement_owner(statements)
+    node_rows, node_fields, node_values = features.categorical_rows(global_nodes)
     statement_rows, statement_fields, statement_values = features.categorical_rows(statement_owners)
     categorical_fields = torch.cat((node_fields, statement_fields)).to(state.device)
     categorical_targets = torch.cat((node_values, statement_values)).to(state.device)
@@ -140,7 +140,7 @@ def _auxiliary_tensors(
             _owner_states(state, statements, features.cat_owner[statement_rows] - features.node_count, statement_rows),
         )
     )
-    numeric_rows, numeric_fields, numeric_values, numeric_valid = features.numeric_rows(global_nodes.cpu())
+    numeric_rows, numeric_fields, numeric_values, numeric_valid = features.numeric_rows(global_nodes)
     statement_numeric_rows, statement_numeric_fields, statement_numeric_values, statement_numeric_valid = (
         features.numeric_rows(statement_owners)
     )
@@ -280,7 +280,12 @@ def train_batches(
             int(_load(example.graph.edge_type_id, root, torch.device("cpu")).max()) for example in examples
         )
     model = build_model(document, root, edge_type_count, seed).to(resolved_device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    # fused AdamW is a CUDA-only kernel choice; the CPU path stays bitwise unchanged.
+    optimizer = (
+        torch.optim.AdamW(model.parameters(), lr=learning_rate, fused=True)
+        if resolved_device.type == "cuda"
+        else torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    )
     identity = config_hash(document, learning_rate=learning_rate, seed=seed, auxiliary_weight=auxiliary_weight)
     metrics: dict[str, float] = {"loss": 0.0, "batches": 0.0}
     total = 0.0
@@ -301,7 +306,9 @@ def train_batches(
         random.setstate(restored["rng"]["python"])
         np.random.set_state(restored["rng"]["numpy"])
         torch.set_rng_state(restored["rng"]["torch"])
-    features = FeatureIndex(root, document) if document.get("features", {}).get("categorical") else None
+    features = (
+        FeatureIndex(root, document).to(resolved_device) if document.get("features", {}).get("categorical") else None
+    )
     use_bf16 = resolved_device.type == "cuda" and torch.cuda.get_device_capability(resolved_device)[0] >= 8
     all_indices = list(range(len(examples)))
     consumed = 0
