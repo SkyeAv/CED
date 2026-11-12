@@ -1,6 +1,6 @@
 """Frozen pre-optimization reference for evaluation (do not edit).
 
-Verbatim copy of src/ced/model/evaluation.py as of commit f0bc990, with the
+Verbatim copy of src/ced/model/evaluation.py as of main commit 3b62f75, with the
 public entry point renamed evaluate_dataset -> evaluate_dataset_reference.
 tests/test_evaluation_equivalence.py proves the vectorized production version
 returns an identical report (mrr, hits, per-predicate/family groups, integer
@@ -98,9 +98,11 @@ def evaluate_dataset_reference(
     resolved = resolve_device(device)
     document = json.loads((root / "manifest.json").read_text())
     references = {name: TensorRef.model_validate(item) for name, item in document["tensors"].items()}
-    arrays = {name: reference.load(root).copy() for name, reference in references.items()}
+    arrays = {name: reference.load(root) for name, reference in references.items()}
     pools: TypedPools | None = (
-        typed_pools(arrays["edge_index"], arrays["relation_id"], arrays["split"], arrays["type_set_id"])
+        typed_pools(
+            np.stack((arrays["head"], arrays["tail"])), arrays["relation_id"], arrays["split"], arrays["type_set_id"]
+        )
         if ranking == "sampled"
         else None
     )
@@ -108,8 +110,8 @@ def evaluate_dataset_reference(
     def tensor(name: str) -> torch.Tensor:
         return torch.from_numpy(arrays[name]).to(resolved)
 
-    edge_index, relations, splits, types = (
-        tensor("edge_index"),
+    edge_index = torch.from_numpy(np.stack((arrays["head"], arrays["tail"])))
+    relations, splits, types = (
         tensor("relation_id"),
         tensor("split"),
         tensor("type_set_id"),

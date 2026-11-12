@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -22,8 +24,9 @@ from reference_evaluation import _full_messages as full_messages_reference  # no
 from reference_evaluation import evaluate_dataset_reference  # noqa: E402
 from support import write_table  # noqa: E402
 
+from ced.acquisition.base import sha256_file  # noqa: E402
 from ced.model.evaluation import _build_positives, _full_messages, _score_relation_batch, evaluate_dataset  # noqa: E402
-from ced.model.prepare import save_tensor  # noqa: E402
+from ced.model.schemas import TensorRef  # noqa: E402
 from ced.model.training import build_model  # noqa: E402
 
 
@@ -89,27 +92,62 @@ def test_evaluation_report_identical_to_reference(
 
 
 def _multi_target_dataset(root: Path) -> None:
-    tensors = {
-        "edge_index": np.array([[0, 1, 2, 0, 3, 4, 1, 5, 2, 4], [1, 2, 3, 2, 4, 5, 0, 0, 4, 5]], dtype=np.int64),
-        "relation_id": np.array([0, 1, 0, 1, 0, 1, 1, 0, 1, 0], dtype=np.int64),
-        "split": np.array([0, 0, 0, 0, 1, 1, 2, 2, 2, 2], dtype=np.int8),
-        "type_set_id": np.zeros(6, dtype=np.int64),
-    }
     root.mkdir(parents=True)
-    references = {name: save_tensor(root, name, values) for name, values in tensors.items()}
-    write_table(root / "entities.parquet", "id", [f"CED:Family_{index}" for index in range(6)])
+    statements = 10
+    topology = root / "topology.parquet"
+    pq.write_table(
+        pa.table(
+            {
+                "index": pa.array(list(range(statements)), pa.int64()),
+                "statement_id": pa.array(list(range(statements)), pa.int64()),
+                "group_id": pa.array([0] * statements, pa.int64()),
+                "split": pa.array([0, 0, 0, 0, 1, 1, 2, 2, 2, 2], pa.int8()),
+                "head": pa.array([0, 1, 2, 0, 3, 4, 1, 5, 2, 4], pa.int64()),
+                "tail": pa.array([1, 2, 3, 2, 4, 5, 0, 0, 4, 5], pa.int64()),
+                "relation_id": pa.array([0, 1, 0, 1, 0, 1, 1, 0, 1, 0], pa.int64()),
+            }
+        ),
+        topology,
+        compression="zstd",
+    )
+    entities = root / "entities.parquet"
+    pq.write_table(
+        pa.table(
+            {
+                "id": pa.array([f"CED:Family_{index}" for index in range(6)]),
+                "type_set_id": pa.array([0] * 6, pa.int64()),
+            }
+        ),
+        entities,
+        compression="zstd",
+    )
     write_table(root / "relations.parquet", "id", ["p0", "p1"])
-    pq_document = {
+    write_table(root / "types.parquet", "categories", [["biolink:Gene"]])
+    topology_digest = sha256_file(topology)
+
+    def topology_ref(name: str, dtype: str) -> TensorRef:
+        return TensorRef(path="topology.parquet", column=name, dtype=dtype, shape=[statements], sha256=topology_digest)
+
+    references = {
+        "head": topology_ref("head", "int64"),
+        "tail": topology_ref("tail", "int64"),
+        "relation_id": topology_ref("relation_id", "int64"),
+        "split": topology_ref("split", "int8"),
+        "type_set_id": TensorRef(
+            path="entities.parquet",
+            column="type_set_id",
+            dtype="int64",
+            shape=[6],
+            sha256=sha256_file(entities),
+        ),
+    }
+    document = {
         "relations": 2,
         "entities": 6,
-        "statements": 10,
+        "statements": statements,
         "tensors": {name: reference.model_dump(mode="json") for name, reference in references.items()},
     }
-    (root / "manifest.json").write_text(json.dumps(pq_document))
-    write_table(root / "types.parquet", "categories", [["biolink:Gene"]])
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
+    (root / "manifest.json").write_text(json.dumps(document))
     pq.write_table(
         pa.table({"idx": pa.array([], pa.int64()), "kind": pa.array([], pa.string())}),
         root / "fitted_fields.parquet",

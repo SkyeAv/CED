@@ -24,7 +24,10 @@ def write_batch_shards_reference(
 ) -> list[TrainingExample]:
     from ced.model.prepare import save_tensor
 
-    edges, relations, splits, types = (arrays[key] for key in ("edge_index", "relation_id", "split", "type_set_id"))
+    head, tail, relations, splits, types = (
+        arrays[key] for key in ("head", "tail", "relation_id", "split", "type_set_id")
+    )
+    edges = np.stack((head, tail))
     examples = []
     chunk_size = max(1, runtime.batch.node_limit // (2 * (runtime.split.negatives + 1)))
     disk: DiskGraph | None = None

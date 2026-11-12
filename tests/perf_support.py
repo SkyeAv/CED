@@ -55,66 +55,6 @@ def synthetic_graph(
     }
 
 
-def topology_tables(
-    connection, *, entities: int, predicates: int, statements: int, seed: int, schema_fraction: float = 0.05
-) -> None:
-    """Create entities/relations/statements/types tables shaped like a snapshot."""
-    random = np.random.default_rng(seed)
-    connection.execute(
-        f"""CREATE TABLE entities AS SELECT 'E:' || lpad(i::VARCHAR, 7, '0') AS id, (i - 1)::BIGINT AS idx,
-            ['biolink:NamedThing'] AS categories FROM generate_series(1, {entities}) t(i)"""
-    )
-    connection.execute(
-        f"""CREATE TABLE relations AS SELECT 'P:' || lpad(i::VARCHAR, 5, '0') AS id, (i - 1)::BIGINT AS idx
-            FROM generate_series(1, {predicates}) t(i)"""
-    )
-    heads = random.integers(0, entities, statements)
-    tails = random.integers(0, entities, statements)
-    preds = random.integers(0, predicates, statements)
-    roles = np.where(random.random(statements) < schema_fraction, "schema", "association")
-    connection.execute(
-        "CREATE TABLE statements (id VARCHAR, subject VARCHAR, predicate VARCHAR, object VARCHAR, relation_role VARCHAR)"
-    )
-    connection.executemany(
-        "INSERT INTO statements VALUES (?, ?, ?, ?, ?)",
-        [
-            (
-                f"S:{index:07d}",
-                f"E:{heads[index] + 1:07d}",
-                f"P:{preds[index] + 1:05d}",
-                f"E:{tails[index] + 1:07d}",
-                str(roles[index]),
-            )
-            for index in range(statements)
-        ],
-    )
-    connection.execute("CREATE TABLE types AS SELECT ['biolink:NamedThing'] AS categories, 0::BIGINT AS idx")
-
-
-def feature_tables(connection, *, owners: int, fields: int, seed: int, null_fraction: float = 0.2) -> None:
-    """Create categorical/numeric event tables shaped like _write_ordered inputs."""
-    random = np.random.default_rng(seed)
-    categorical = [
-        (owner, field, ordinal, int(random.integers(0, 9)))
-        for owner in range(owners)
-        for field in range(1, fields + 1)
-        for ordinal in range(int(random.integers(1, 4)))
-    ]
-    connection.execute(
-        "CREATE TABLE categorical_events (owner_index BIGINT, field_id BIGINT, ordinal BIGINT, value_id BIGINT)"
-    )
-    connection.executemany("INSERT INTO categorical_events VALUES (?, ?, ?, ?)", categorical)
-    numeric = [
-        (owner, field, None if random.random() < null_fraction else float(random.normal()), field % 2 == 0)
-        for owner in range(owners)
-        for field in range(1, fields + 1)
-    ]
-    connection.execute(
-        "CREATE TABLE numeric_events (owner_index BIGINT, field_id BIGINT, numeric DOUBLE, valid BOOLEAN)"
-    )
-    connection.executemany("INSERT INTO numeric_events VALUES (?, ?, ?, ?)", numeric)
-
-
 def timed(fn: Callable[[], Any], *, iterations: int, warmup: int = 1) -> dict[str, float]:
     """Run fn warmup+iterations times, return per-call seconds (min/mean/total)."""
     for _ in range(warmup):

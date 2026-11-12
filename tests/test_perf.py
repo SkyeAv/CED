@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from perf_support import feature_tables, synthetic_graph, timed, topology_tables, write_record
+from perf_support import synthetic_graph, timed, write_record
 
 pytestmark = pytest.mark.perf
 
@@ -76,103 +76,6 @@ def test_perf_neighborhood() -> None:
         iterations=3,
     )
     write_record("sample_neighborhood_shared_adjacency", seconds=shared_seconds, iterations=3, workload=workload)
-
-
-def test_perf_prepare_topology(tmp_path: Path) -> None:
-    import duckdb
-
-    from ced.config.models import SplitSettings
-    from ced.model.prepare import _write_topology
-
-    entities, predicates, statements = 500, 20, 20000
-    connection = duckdb.connect()
-    try:
-        topology_tables(connection, entities=entities, predicates=predicates, statements=statements, seed=13)
-        arrays = {
-            "edge_index": np.zeros((2, statements), dtype=np.int64),
-            "relation_id": np.zeros(statements, dtype=np.int64),
-            "split": np.zeros(statements, dtype=np.int8),
-        }
-        settings = SplitSettings()
-        records = tmp_path / "split-records.ndjson"
-        workload = {"entities": entities, "predicates": predicates, "statements": statements}
-        seconds = timed(
-            lambda: _write_topology(connection, arrays, records, settings, statements),
-            iterations=3,
-        )
-        write_record("prepare_topology", seconds=seconds, iterations=3, workload=workload)
-    finally:
-        connection.close()
-
-
-def test_perf_prepare_topology_memmap(tmp_path: Path) -> None:
-    import duckdb
-
-    from ced.config.models import SplitSettings
-    from ced.model.prepare import _write_topology
-
-    statements = 20000
-    connection = duckdb.connect()
-    try:
-        topology_tables(connection, entities=500, predicates=20, statements=statements, seed=13)
-        arrays = {
-            "edge_index": np.lib.format.open_memmap(
-                tmp_path / "edge_index.npy", mode="w+", dtype=np.int64, shape=(2, statements)
-            ),
-            "relation_id": np.lib.format.open_memmap(
-                tmp_path / "relation_id.npy", mode="w+", dtype=np.int64, shape=(statements,)
-            ),
-            "split": np.lib.format.open_memmap(tmp_path / "split.npy", mode="w+", dtype=np.int8, shape=(statements,)),
-        }
-        settings = SplitSettings()
-        records = tmp_path / "split-records.ndjson"
-        seconds = timed(
-            lambda: _write_topology(connection, arrays, records, settings, statements),
-            iterations=3,
-        )
-        write_record(
-            "prepare_topology_memmap",
-            seconds=seconds,
-            iterations=3,
-            workload={"statements": statements, "backing": "memmap"},
-        )
-    finally:
-        connection.close()
-
-
-def test_perf_write_ordered(tmp_path: Path) -> None:
-    import duckdb
-
-    from ced.model.feature_store import _write_ordered
-
-    owners, fields = 2000, 6
-    connection = duckdb.connect()
-    try:
-        feature_tables(connection, owners=owners, fields=fields, seed=17)
-        categorical_query = (
-            "SELECT owner_index, field_id, ordinal, value_id FROM categorical_events "
-            "ORDER BY owner_index, field_id, ordinal"
-        )
-        numeric_query = (
-            "SELECT owner_index, field_id, numeric, valid FROM numeric_events ORDER BY owner_index, field_id"
-        )
-        workload = {"owners": owners, "fields": fields}
-        categorical_root = tmp_path / "categorical"
-        numeric_root = tmp_path / "numeric"
-        categorical_root.mkdir()
-        numeric_root.mkdir()
-        categorical_seconds = timed(
-            lambda: _write_ordered(connection, categorical_query, categorical_root, "categorical", owners),
-            iterations=3,
-        )
-        numeric_seconds = timed(
-            lambda: _write_ordered(connection, numeric_query, numeric_root, "numeric", owners),
-            iterations=3,
-        )
-        write_record("write_ordered_categorical", seconds=categorical_seconds, iterations=3, workload=workload)
-        write_record("write_ordered_numeric", seconds=numeric_seconds, iterations=3, workload=workload)
-    finally:
-        connection.close()
 
 
 def test_perf_encoder_forward() -> None:

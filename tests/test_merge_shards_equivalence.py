@@ -123,8 +123,19 @@ def _runtime(root: Path) -> RuntimeConfig:
     )
 
 
+def _shard_arrays(*, nodes: int, edges: int, relations: int, type_sets: int, seed: int) -> dict[str, np.ndarray]:
+    graph = synthetic_graph(nodes=nodes, edges=edges, relations=relations, type_sets=type_sets, seed=seed)
+    return {
+        "head": graph["edge_index"][0],
+        "tail": graph["edge_index"][1],
+        "relation_id": graph["relation_id"],
+        "split": graph["split"],
+        "type_set_id": graph["type_set_id"],
+    }
+
+
 def test_batch_shards_and_tensor_bytes_are_identical_to_reference(tmp_path: Path) -> None:
-    arrays = synthetic_graph(nodes=30, edges=90, relations=3, type_sets=3, seed=23)
+    arrays = _shard_arrays(nodes=30, edges=90, relations=3, type_sets=3, seed=23)
     reference_root = tmp_path / "reference"
     produced_root = tmp_path / "produced"
     expected = write_batch_shards_reference(reference_root, arrays, _runtime(tmp_path))
@@ -132,8 +143,8 @@ def test_batch_shards_and_tensor_bytes_are_identical_to_reference(tmp_path: Path
     assert [example.model_dump(mode="json") for example in produced] == [
         example.model_dump(mode="json") for example in expected
     ]
-    reference_files = sorted(path.relative_to(reference_root) for path in reference_root.rglob("*.npy"))
-    produced_files = sorted(path.relative_to(produced_root) for path in produced_root.rglob("*.npy"))
+    reference_files = sorted(path.relative_to(reference_root) for path in reference_root.rglob("*.parquet"))
+    produced_files = sorted(path.relative_to(produced_root) for path in produced_root.rglob("*.parquet"))
     assert produced_files == reference_files
     for relative in reference_files:
         assert (produced_root / relative).read_bytes() == (reference_root / relative).read_bytes(), relative
@@ -142,7 +153,7 @@ def test_batch_shards_and_tensor_bytes_are_identical_to_reference(tmp_path: Path
 def test_batch_shards_disk_path_is_identical_to_reference(tmp_path: Path) -> None:
     # The same bulk triples feed DiskGraph, so its seeded SQL path must also
     # receive exactly the historical row order and Python integer values.
-    arrays = synthetic_graph(nodes=20, edges=40, relations=2, type_sets=2, seed=29)
+    arrays = _shard_arrays(nodes=20, edges=40, relations=2, type_sets=2, seed=29)
     reference_root = tmp_path / "reference-disk"
     produced_root = tmp_path / "produced-disk"
     reference_root.mkdir()
@@ -152,5 +163,5 @@ def test_batch_shards_disk_path_is_identical_to_reference(tmp_path: Path) -> Non
     assert [example.model_dump(mode="json") for example in produced] == [
         example.model_dump(mode="json") for example in expected
     ]
-    for relative in sorted(path.relative_to(reference_root) for path in reference_root.rglob("*.npy")):
+    for relative in sorted(path.relative_to(reference_root) for path in reference_root.rglob("*.parquet")):
         assert (produced_root / relative).read_bytes() == (reference_root / relative).read_bytes(), relative
