@@ -24,9 +24,8 @@ from reference_evaluation import _full_messages as full_messages_reference  # no
 from reference_evaluation import evaluate_dataset_reference  # noqa: E402
 from support import write_table  # noqa: E402
 
-from ced.acquisition.base import sha256_file  # noqa: E402
 from ced.model.evaluation import _build_positives, _full_messages, _score_relation_batch, evaluate_dataset  # noqa: E402
-from ced.model.schemas import TensorRef  # noqa: E402
+from ced.model.prepare import save_tensor  # noqa: E402
 from ced.model.training import build_model  # noqa: E402
 
 
@@ -123,23 +122,12 @@ def _multi_target_dataset(root: Path) -> None:
     )
     write_table(root / "relations.parquet", "id", ["p0", "p1"])
     write_table(root / "types.parquet", "categories", [["biolink:Gene"]])
-    topology_digest = sha256_file(topology)
-
-    def topology_ref(name: str, dtype: str) -> TensorRef:
-        return TensorRef(path="topology.parquet", column=name, dtype=dtype, shape=[statements], sha256=topology_digest)
-
     references = {
-        "head": topology_ref("head", "int64"),
-        "tail": topology_ref("tail", "int64"),
-        "relation_id": topology_ref("relation_id", "int64"),
-        "split": topology_ref("split", "int8"),
-        "type_set_id": TensorRef(
-            path="entities.parquet",
-            column="type_set_id",
-            dtype="int64",
-            shape=[6],
-            sha256=sha256_file(entities),
-        ),
+        "head": save_tensor(root, "head", np.array([0, 1, 2, 0, 3, 4, 1, 5, 2, 4], dtype=np.int64)),
+        "tail": save_tensor(root, "tail", np.array([1, 2, 3, 2, 4, 5, 0, 0, 4, 5], dtype=np.int64)),
+        "relation_id": save_tensor(root, "relation_id", np.array([0, 1, 0, 1, 0, 1, 1, 0, 1, 0], dtype=np.int64)),
+        "split": save_tensor(root, "split", np.array([0, 0, 0, 0, 1, 1, 2, 2, 2, 2], dtype=np.int8)),
+        "type_set_id": save_tensor(root, "type_set_id", np.zeros(6, dtype=np.int64)),
     }
     document = {
         "relations": 2,

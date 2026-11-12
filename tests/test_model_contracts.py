@@ -61,21 +61,18 @@ def test_negatives_use_global_ids_and_filter_all_positives() -> None:
         ("int8", np.array([0, 3, 2], dtype=np.int8)),
     ],
 )
-def test_parquet_tensor_ref_round_trips_every_supported_dtype(tmp_path: Path, dtype: str, values: np.ndarray) -> None:
-    """Parquet is the only tensor encoding, so every model dtype must survive it exactly.
-
-    Why: a dtype that silently widens, changes signedness or decodes nulls as zeros
-    would corrupt entity indices and feature values long after preparation finished,
-    and nothing downstream re-checks the file.
-    """
+def test_safetensors_tensor_ref_round_trips_every_supported_dtype(
+    tmp_path: Path, dtype: str, values: np.ndarray
+) -> None:
+    """Every model dtype must survive the safetensors encoding exactly."""
     from ced.model.tensors import DEFAULT_COLUMN
 
     ref = save_tensor(tmp_path, "values", values)
-    assert ref.path == "values.parquet"
+    assert ref.path == "values.safetensors"
     assert ref.column == DEFAULT_COLUMN
     assert ref.dtype == dtype
     assert ref.shape == [3]
-    assert (tmp_path / "values.parquet").is_file()
+    assert (tmp_path / "values.safetensors").is_file()
     loaded = ref.load(tmp_path)
     assert loaded.dtype == np.dtype(dtype)
     assert np.array_equal(loaded, values)
@@ -83,13 +80,8 @@ def test_parquet_tensor_ref_round_trips_every_supported_dtype(tmp_path: Path, dt
     assert loaded.flags.c_contiguous
 
 
-def test_parquet_tensor_ref_restores_multidimensional_shape(tmp_path: Path) -> None:
-    """A rank-2 tensor must come back with its shape, from one flat C-order column.
-
-    Why: batch shards store (2, E) edge_index and (rows, negatives) candidate
-    matrices. Flattening on write and reshaping on read is the single convention
-    that covers every rank; getting it wrong would transpose message passing.
-    """
+def test_safetensors_tensor_ref_restores_multidimensional_shape(tmp_path: Path) -> None:
+    """Batch matrices must retain their rank and reject same-sized shape changes."""
     values = np.arange(6, dtype=np.int64).reshape(2, 3)
     ref = save_tensor(tmp_path, "edge_index", values)
     assert ref.shape == [2, 3]
@@ -97,30 +89,80 @@ def test_parquet_tensor_ref_restores_multidimensional_shape(tmp_path: Path) -> N
     assert loaded.shape == (2, 3)
     assert np.array_equal(loaded, values)
     assert loaded.flags.c_contiguous
+    with pytest.raises(ValueError, match="shape mismatch"):
+        ref.model_copy(update={"shape": [3, 2]}).load(tmp_path)
 
 
-def test_parquet_tensor_refs_share_one_file_by_column(tmp_path: Path) -> None:
-    """Several refs may address different columns of one Parquet file.
+def test_safetensors_tensor_ref_round_trips_empty_tensor(tmp_path: Path) -> None:
+    values = np.array([], dtype=np.int64)
+    ref = save_tensor(tmp_path, "empty", values)
+    assert ref.shape == [0]
+    assert np.array_equal(ref.load(tmp_path), values)
 
-    Why: topology and feature artifacts are written by a single streaming DuckDB
-    COPY into one multi-column file. Each logical tensor still needs its own ref,
-    its own dtype check and its own shape, without duplicating the payload.
-    """
-    import pyarrow as pa
-    import pyarrow.parquet as pq
+
+def test_safetensors_streaming_writer_round_trips_batches(tmp_path: Path) -> None:
+    from ced.acquisition.base import sha256_file
+    from ced.model.schemas import TensorRef
+    from ced.model.tensors import write_tensor_stream
+
+    path = tmp_path / "streamed.safetensors"
+    write_tensor_stream(
+        path,
+        [np.array([0, 1], dtype=np.int64), np.array([2], dtype=np.int64)],
+        shape=[3],
+        dtype="int64",
+    )
+    ref = TensorRef(path=path.name, dtype="int64", shape=[3], sha256=sha256_file(path))
+    assert ref.load(tmp_path).tolist() == [0, 1, 2]
+    empty_path = tmp_path / "empty-stream.safetensors"
+    write_tensor_stream(empty_path, [], shape=[0], dtype="float32")
+    empty = TensorRef(path=empty_path.name, dtype="float32", shape=[0], sha256=sha256_file(empty_path))
+    assert empty.load(tmp_path).shape == (0,)
+    with pytest.raises(ValueError, match="shape mismatch"):
+        write_tensor_stream(path, [np.array([3], dtype=np.int64)], shape=[2], dtype="int64")
+    with pytest.raises(ValueError, match="dtype mismatch"):
+        write_tensor_stream(path, [np.array([3], dtype=np.float32)], shape=[1], dtype="int64")
+    assert not list(tmp_path.glob("*.raw.tmp-*"))
+
+
+def test_safetensors_streaming_writer_preserves_serialization_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ced.model import tensors
+
+    def fail_serialization(*args: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(tensors, "serialize_file", fail_serialization)
+    with pytest.raises(OSError, match="disk full"):
+        tensors.write_tensor_stream(
+            tmp_path / "failed.safetensors",
+            [np.array([1], dtype=np.int64)],
+            shape=[1],
+            dtype="int64",
+        )
+    assert not list(tmp_path.glob("*.tmp-*"))
+
+
+def test_safetensors_tensor_refs_share_one_file_by_column(tmp_path: Path) -> None:
+    """Several refs may address named tensors in one safetensors file."""
+    from safetensors.numpy import save_file
 
     from ced.acquisition.base import sha256_file
     from ced.model.schemas import TensorRef
 
-    pq.write_table(
-        pa.table({"head": pa.array([0, 1], pa.int64()), "tail": pa.array([1, 0], pa.int64())}),
-        tmp_path / "topology.parquet",
-        compression="zstd",
+    path = tmp_path / "topology.safetensors"
+    save_file(
+        {
+            "head": np.array([0, 1], dtype=np.int64),
+            "tail": np.array([1, 0], dtype=np.int64),
+        },
+        path,
     )
-    digest = sha256_file(tmp_path / "topology.parquet")
+    digest = sha256_file(path)
 
     def ref(column: str) -> TensorRef:
-        return TensorRef(path="topology.parquet", column=column, dtype="int64", shape=[2], sha256=digest)
+        return TensorRef(path=path.name, column=column, dtype="int64", shape=[2], sha256=digest)
 
     assert ref("head").load(tmp_path).tolist() == [0, 1]
     assert ref("tail").load(tmp_path).tolist() == [1, 0]
@@ -132,32 +174,10 @@ def test_parquet_tensor_refs_share_one_file_by_column(tmp_path: Path) -> None:
         ref("head").model_copy(update={"shape": [3]}).load(tmp_path)
 
 
-def test_parquet_tensor_ref_rejects_nulls_and_hash_mismatch(tmp_path: Path) -> None:
-    """A null in a tensor column and a mutated file must both fail loudly.
-
-    Why: nulls have no representation in the index tensors, and decoding them as
-    zeros would invent edges from entity 0. A mutated payload must be caught by the
-    checksum before it reaches training or evaluation.
-    """
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    from ced.acquisition.base import sha256_file
-    from ced.model.schemas import TensorRef
-
+def test_safetensors_tensor_ref_rejects_hash_mismatch(tmp_path: Path) -> None:
+    """A mutated tensor payload must fail before training or evaluation reads it."""
     ref = save_tensor(tmp_path, "ids", np.array([1, 2], dtype=np.int64))
     assert ref.load(tmp_path).tolist() == [1, 2]
-
-    pq.write_table(pa.table({"value": pa.array([1, None], pa.int64())}), tmp_path / "nulls.parquet", compression="zstd")
-    nulls = TensorRef(
-        path="nulls.parquet",
-        dtype="int64",
-        shape=[2],
-        sha256=sha256_file(tmp_path / "nulls.parquet"),
-    )
-    with pytest.raises(ValueError, match="contains nulls"):
-        nulls.load(tmp_path)
-
     save_tensor(tmp_path, "ids", np.array([3, 4], dtype=np.int64))
     with pytest.raises(ValueError, match="checksum mismatch"):
         ref.load(tmp_path)
@@ -172,7 +192,7 @@ def test_write_tensor_rejects_unsupported_dtype(tmp_path: Path) -> None:
     from ced.model.tensors import write_tensor
 
     with pytest.raises(ValueError, match="unsupported tensor dtype"):
-        write_tensor(tmp_path / "bad.parquet", np.array([1.0, 2.0], dtype=np.float64))
+        write_tensor(tmp_path / "bad.safetensors", np.array([1.0, 2.0], dtype=np.float64))
 
 
 def test_neighbor_sampler_excludes_heldout_and_schema() -> None:
@@ -353,10 +373,10 @@ def test_text_embedding_cache_appends_parts_without_rewriting(tmp_path: Path) ->
         return iter([(texts, encoder.encode(texts).detach().cpu().numpy())])
 
     assert cache.append_stream(batches(["one", "two"])) == 2
-    first_parts = {path.name: sha256_file(path) for path in sorted(cache.parts.glob("*.parquet"))}
+    first_parts = {path.name: sha256_file(path) for path in sorted(cache.parts.glob("*.safetensors"))}
     assert cache.append_stream(batches(["three"])) == 1
 
-    second_parts = {path.name: sha256_file(path) for path in sorted(cache.parts.glob("*.parquet"))}
+    second_parts = {path.name: sha256_file(path) for path in sorted(cache.parts.glob("*.safetensors"))}
     assert first_parts == {name: second_parts[name] for name in first_parts}
     assert len(second_parts) == len(first_parts) + 1
     assert cache.manifest()["rows"] == 3
@@ -535,6 +555,9 @@ def test_text_embedding_cache_ignores_unpublished_index_parts(tmp_path: Path) ->
 
     # The next append reuses the orphan name, so the crash self-heals.
     assert cache.append_stream(batches(["two"])) == 1
-    assert [part["name"] for part in cache.manifest()["parts"]] == ["part-000000.parquet", "part-000001.parquet"]
+    assert [part["name"] for part in cache.manifest()["parts"]] == [
+        "part-000000.safetensors",
+        "part-000001.safetensors",
+    ]
     assert index_rows() == {text_key("one"): 0, text_key("two"): 1}
     assert not list(cache.index.glob("*.tmp-*"))
