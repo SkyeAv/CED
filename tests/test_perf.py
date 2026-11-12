@@ -289,3 +289,87 @@ def test_perf_evaluation_relation_scoring(tmp_path: Path, synthetic_dataset: Cal
     batched_seconds = timed(batched_scores, iterations=3)
     write_record("evaluation_scoring_reference", seconds=reference_seconds, iterations=3, workload=workload)
     write_record("evaluation_scoring_batched", seconds=batched_seconds, iterations=3, workload=workload)
+
+
+def test_perf_shards_construction() -> None:
+    from ced.model.shards import _edge_type_ids, _positive_triples
+
+    graph = synthetic_graph(nodes=2000, edges=20000, relations=8, type_sets=4, seed=31)
+    edges, relations = graph["edge_index"], graph["relation_id"]
+    splits, types = graph["split"], graph["type_set_id"]
+    train = np.flatnonzero(splits == 0)
+
+    def reference_edge_types() -> np.ndarray:
+        parameter_keys: dict[tuple[int, int, int], int] = {}
+        edge_types = np.zeros(len(relations), dtype=np.int64)
+        for index in train:
+            key = (int(types[edges[0, index]]), int(relations[index]), int(types[edges[1, index]]))
+            edge_types[index] = parameter_keys.setdefault(key, len(parameter_keys))
+        return edge_types
+
+    positive = train[:2048]
+
+    def reference_triples() -> list[tuple[int, int, int]]:
+        return [(int(edges[0, i]), int(relations[i]), int(edges[1, i])) for i in positive]
+
+    assert np.array_equal(_edge_type_ids(edges, relations, splits, types), reference_edge_types())
+    assert _positive_triples(edges, relations, positive) == reference_triples()
+    workload = {"nodes": 2000, "edges": 20000, "train_edges": len(train), "triples": len(positive)}
+    edge_reference = timed(reference_edge_types, iterations=3)
+    edge_vectorized = timed(lambda: _edge_type_ids(edges, relations, splits, types), iterations=3)
+    triple_reference = timed(reference_triples, iterations=3)
+    triple_vectorized = timed(lambda: _positive_triples(edges, relations, positive), iterations=3)
+    write_record("shards_edge_types_reference", seconds=edge_reference, iterations=3, workload=workload)
+    write_record("shards_edge_types", seconds=edge_vectorized, iterations=3, workload=workload)
+    write_record("shards_triples_reference", seconds=triple_reference, iterations=3, workload=workload)
+    write_record("shards_triples", seconds=triple_vectorized, iterations=3, workload=workload)
+
+
+def test_perf_merge_nodes(tmp_path: Path) -> None:
+    import duckdb
+    from reference_merge import merge_nodes_reference
+
+    from ced.kg.merge import merge_nodes
+    from ced.kg.records import CanonicalBatch, NodeRecord
+    from ced.kg.writer import CanonicalBatchWriter
+
+    identities, duplicates = 1000, 8
+
+    def write_fixture(root: Path) -> None:
+        nodes = [
+            NodeRecord(
+                id=f"X:{identity}",
+                names=[f"Name {identity}", f"Alias {duplicate}"],
+                categories=[f"biolink:Category{duplicate % 3}"],
+                provided_by=[f"source-{duplicate}"],
+                original_label=f"Name {identity}",
+                native_ids={"shared": f"N:{identity}", f"source-{duplicate}": f"N:{identity}"},
+                attributes={"duplicate": duplicate},
+            )
+            for identity in range(identities)
+            for duplicate in range(duplicates)
+        ]
+        writer = CanonicalBatchWriter(root / "raw", shard_rows=512)
+        writer.write(CanonicalBatch(nodes=nodes))
+        writer.close()
+
+    def measure(label: str, implementation: Callable[..., int]) -> None:
+        roots = [tmp_path / f"{label}-{iteration}" for iteration in range(3)]
+        for root in roots:
+            write_fixture(root)
+        remaining = iter(roots)
+
+        def run() -> None:
+            connection = duckdb.connect()
+            try:
+                connection.execute("SET threads=4")
+                implementation(next(remaining), connection, group_rows=256)
+            finally:
+                connection.close()
+
+        seconds = timed(run, iterations=3, warmup=0)
+        workload = {"identities": identities, "duplicates": duplicates, "rows": identities * duplicates}
+        write_record(label, seconds=seconds, iterations=3, workload=workload)
+
+    measure("merge_nodes_reference", merge_nodes_reference)
+    measure("merge_nodes", merge_nodes)

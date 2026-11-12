@@ -12,6 +12,44 @@ from ced.model.negatives import negative_context, sample_negatives, typed_pools
 from ced.model.schemas import GraphBatch, NegativeBatch, TrainingExample
 
 
+def _edge_type_ids(edge_index: np.ndarray, relations: np.ndarray, splits: np.ndarray, types: np.ndarray) -> np.ndarray:
+    """Assign train edge-type ids by first occurrence without a Python row loop."""
+    edge_types = np.zeros(len(relations), dtype=np.int64)
+    train = np.flatnonzero(splits == 0)
+    if not train.size:
+        return edge_types
+    keys = np.column_stack((types[edge_index[0, train]], relations[train], types[edge_index[1, train]]))
+    relation_count = int(relations.max()) + 1
+    type_count = int(types.max()) + 1
+    # One-dimensional unique is substantially faster than structured row unique.
+    # Retain the overflow-free row path for arbitrary negative or huge ids.
+    if np.all(keys >= 0) and 0 < relation_count * type_count * type_count < 2**63:
+        encoded = (keys[:, 0] * relation_count + keys[:, 1]) * type_count + keys[:, 2]
+        _, first_positions, inverse = np.unique(encoded, return_index=True, return_inverse=True)
+    else:
+        _, first_positions, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    appearance = np.argsort(first_positions)
+    renumbered = np.empty(len(first_positions), dtype=np.int64)
+    renumbered[appearance] = np.arange(len(first_positions), dtype=np.int64)
+    edge_types[train] = renumbered[inverse]
+    return edge_types
+
+
+def _positive_triples(
+    edge_index: np.ndarray, relations: np.ndarray, positive: np.ndarray
+) -> list[tuple[int, int, int]]:
+    """Convert selected columns to Python triples without per-row scalar indexing."""
+    return list(
+        zip(
+            edge_index[0, positive].tolist(),
+            relations[positive].tolist(),
+            edge_index[1, positive].tolist(),
+            strict=True,
+        )
+    )
+
+
 def write_batch_shards(
     root: Path, arrays: Mapping[str, np.ndarray], runtime: RuntimeConfig, *, in_memory: bool = True
 ) -> list[TrainingExample]:
@@ -34,16 +72,12 @@ def write_batch_shards(
     # Encoded once for all chunks: repeated per-chunk negative sampling must not
     # re-walk every positive statement in Python.
     context = negative_context(edges[0], relations, edges[1]) if in_memory else None
-    parameter_keys: dict[tuple[int, int, int], int] = {}
-    edge_types = np.zeros(len(relations), dtype=np.int64)
-    for index in np.flatnonzero(splits == 0):
-        key = (int(types[edges[0, index]]), int(relations[index]), int(types[edges[1, index]]))
-        edge_types[index] = parameter_keys.setdefault(key, len(parameter_keys))
+    edge_types = _edge_type_ids(edges, relations, splits, types)
     for split_id, label in enumerate(("train", "validation", "test")):
         selected = np.flatnonzero(splits == split_id)
         for start in range(0, len(selected), chunk_size):
             positive = selected[start : start + chunk_size]
-            triples = [(int(edges[0, i]), int(relations[i]), int(edges[1, i])) for i in positive]
+            triples = _positive_triples(edges, relations, positive)
             if in_memory:
                 assert pools is not None
                 assert context is not None
