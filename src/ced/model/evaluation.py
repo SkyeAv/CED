@@ -218,6 +218,8 @@ def evaluate_dataset(
         message_relations.to(resolved),
         message_types.to(resolved),
     )
+    train_statements = torch.nonzero(splits == 0).flatten()
+    message_statements = torch.cat((train_statements, train_statements)).to(resolved)
     model = build_model(document, root, edge_type_count, seed).to(resolved)
     if checkpoint is not None:
         model.load_state_dict(torch.load(checkpoint, map_location=resolved, weights_only=True)["state"])
@@ -228,9 +230,7 @@ def evaluate_dataset(
             model.features.node_features(entity_ids),
             messages,
             message_types,
-            model.features.statement_features(
-                message_relations, torch.arange(message_relations.numel(), device=resolved)
-            ),
+            model.features.statement_features(message_relations, message_statements),
         )
     positives = _build_positives(edge_index, relations)
     split_id = 1 if split == "validation" else 2

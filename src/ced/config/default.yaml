@@ -40,8 +40,9 @@ evaluation:
   selection_metric: ced_family.mrr
 text_encoding:
   provider: none
-  model: sentence-transformers/all-MiniLM-L6-v2
-  dimension: 384
+  model: Qwen/Qwen3-Embedding-0.6B
+  revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
+  dimension: 1024
   batch_size: 64
   max_length: 256
   normalize: true

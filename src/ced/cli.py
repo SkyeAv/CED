@@ -140,14 +140,19 @@ def prepare(snapshot: str) -> None:
 
 @app.command
 def encode_text(
-    dataset: str, provider: str | None = None, model: str | None = None, dimension: int | None = None
+    dataset: str,
+    provider: str | None = None,
+    model: str | None = None,
+    revision: str | None = None,
+    dimension: int | None = None,
 ) -> None:
-    """Encode prepared text features with the configured Sentence Transformers backend."""
+    """Encode prepared text, predicates, and qualifiers with the configured backend."""
     arguments = [
         "encode-text",
         dataset,
         *(["--provider", provider] if provider else []),
         *(["--model", model] if model else []),
+        *(["--revision", revision] if revision else []),
         *(["--dimension", str(dimension)] if dimension else []),
     ]
 
@@ -155,11 +160,18 @@ def encode_text(
         from ced.config.models import TextEncodingSettings
 
         runtime = load_runtime()
-        updates = {
+        updates: dict[str, object] = {
             name: value
-            for name, value in (("provider", provider), ("model", model), ("dimension", dimension))
+            for name, value in (
+                ("provider", provider),
+                ("model", model),
+                ("revision", revision),
+                ("dimension", dimension),
+            )
             if value is not None
         }
+        if model is not None and model != runtime.text_encoding.model and revision is None:
+            updates["revision"] = None
         if updates:
             runtime.text_encoding = TextEncodingSettings.model_validate(runtime.text_encoding.model_dump() | updates)
         import_module("ced.model.encoding").encode_dataset_text(runtime, dataset)

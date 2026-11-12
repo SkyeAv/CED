@@ -135,7 +135,17 @@ Use sampled ranking for very large candidate spaces; exact ranking remains the d
 
 ## Text encoding
 
-Sentence Transformers support is optional and centralized in `src/ced/model/encoding.py`. The default provider is `none`; tests use deterministic random encoders or mocked models and never download weights. Configure `text_encoding.provider=sentence_transformers` and a locally available model before running `ced encode-text`.
+Sentence Transformers support is optional. The default provider is `none`; tests use deterministic random encoders or mocked models and never download weights. The default model is `Qwen/Qwen3-Embedding-0.6B`, pinned to revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`, with 1024-dimensional output. Make that revision available in the local Hugging Face cache, then run:
+
+```sh
+ced encode-text <dataset-id> --provider sentence_transformers
+```
+
+`local_files_only=true` is the default, so this command never downloads weights implicitly. `--model`, `--revision`, and `--dimension` override the text encoder; selecting a different model without an explicit revision clears the default pin.
+
+Encoding covers ordinary long node/statement text, every predicate, and every distinct qualifier key-value pair. Predicate text uses the canonical ID plus stored names and definitions when available. Qualifier text preserves the exact key and JSON value, including singleton and held-out occurrences; no frequency threshold removes rare qualifiers. Dataset-local `safetensors` tensors align predicate vectors with `relations.parquet` and qualifier vectors with a statement CSR index; Parquet is reserved for text and join tables.
+
+`src/ced/model/semantic.py` compresses frozen predicate and qualifier vectors through separate trainable autoencoder heads. Their bottleneck codes and a learned direction embedding form the encoder's statement features. Reconstruction loss uses only predicates and qualifiers on selected training statements, and `semantic_weight` controls its contribution during `train_batches`. Frozen vectors and sparse indices are non-persistent buffers, so checkpoints contain the learned heads without duplicating the Qwen artifact. Datasets without a `semantic` manifest entry retain the original random feature provider.
 
 Tensor artifacts use dataset schema 2. After upgrading, run `ced prepare` and then `ced encode-text` again; Parquet-backed datasets and embedding caches are not migrated or deleted automatically.
 

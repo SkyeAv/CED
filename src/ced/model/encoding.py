@@ -17,7 +17,7 @@ from torch import nn
 from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.config.models import RuntimeConfig, TextEncodingSettings
 from ced.kg.audit import validate_checksums
-from ced.model.schemas import DenseFeatureStore, TensorRef
+from ced.model.schemas import DatasetManifest, DenseFeatureStore, TensorRef
 from ced.model.tensors import write_tensor
 from ced.preflight import require_cpu_worker
 
@@ -62,7 +62,12 @@ class SentenceTransformerTextEncoder(nn.Module):
             raise ModuleNotFoundError("install the optional text extra: uv sync --extra text") from exception
         device = settings.device if settings.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
         self.settings = settings
-        self.model = SentenceTransformer(settings.model, device=device, local_files_only=settings.local_files_only)
+        self.model = SentenceTransformer(
+            settings.model,
+            revision=settings.revision,
+            device=device,
+            local_files_only=settings.local_files_only,
+        )
         self.model.max_seq_length = settings.max_length
         embedding_dimension = self.model.get_sentence_embedding_dimension()
         if embedding_dimension is None:
@@ -224,7 +229,7 @@ class TextEmbeddingCache:
         return references
 
 
-def _encode_batches(path: Path, encoder: TextEncoder, batch_size: int) -> Iterator[tuple[list[str], np.ndarray]]:
+def encode_batches(path: Path, encoder: TextEncoder, batch_size: int) -> Iterator[tuple[list[str], np.ndarray]]:
     """Stream the texts that still need encoding in bounded batches."""
     if not path.is_file():
         return
@@ -270,7 +275,7 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
                       ORDER BY text_sha256)
                 TO '{missing}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
         )
-        cache.append_stream(_encode_batches(missing, encoder, settings.batch_size))
+        cache.append_stream(encode_batches(missing, encoder, settings.batch_size))
         # Refresh the temp table: the append wrote a new index part that the table
         # built for the anti-join above does not contain.
         cache.create_index(connection)
@@ -287,6 +292,10 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
         resolved = pq.ParquetFile(index_path).metadata.num_rows
         if resolved != records:
             raise ValueError(f"{records - resolved} text records did not resolve to a cached embedding")
+        from ced.model.semantic_encoding import encode_semantic_features
+
+        source = runtime.artifact_path("snapshots", str(manifest["snapshot_id"]))
+        semantic = encode_semantic_features(runtime, root, source, connection, cache, encoder)
         store = DenseFeatureStore(
             provider=settings.provider,
             model=settings.model,
@@ -297,6 +306,17 @@ def encode_dataset_text(runtime: RuntimeConfig, dataset: str) -> DenseFeatureSto
             parts=cache.part_refs(),
         )
         atomic_write_json(root / "text-features.json", store.model_dump(mode="json"))
+        manifest["semantic"] = semantic.model_dump(mode="json")
+        manifest["checksums"] = {
+            str(path.relative_to(root)): sha256_file(path)
+            for path in sorted(root.rglob("*"))
+            if path.is_file()
+            and path.name != "manifest.json"
+            and "spill" not in path.parts
+            and ".partial" not in path.name
+        }
+        document = DatasetManifest.model_validate(manifest)
+        atomic_write_json(root / "manifest.json", document.model_dump(mode="json"))
         return store
     finally:
         # A mid-run failure must not strand intermediates in the published dataset.

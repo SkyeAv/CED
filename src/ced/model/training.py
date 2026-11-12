@@ -17,7 +17,8 @@ from ced.model.decoder import ComplexDecoder
 from ced.model.encoder import RelationalAttentionEncoder
 from ced.model.feature_index import FeatureIndex, load_feature_metadata
 from ced.model.losses import AuxiliaryAttributeDecoder, auxiliary_loss, link_loss
-from ced.model.schemas import GraphBatch, TensorRef, TrainingExample
+from ced.model.schemas import GraphBatch, SemanticFeatureStore, TensorRef, TrainingExample
+from ced.model.semantic import SemanticFeatureProvider
 
 Device = Literal["auto", "cpu", "cuda"]
 
@@ -26,6 +27,8 @@ class FeatureProvider(Protocol):
     def node_features(self, global_node_id: torch.Tensor) -> torch.Tensor: ...
 
     def statement_features(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor: ...
+
+    def reconstruction_loss(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor | None: ...
 
 
 class RandomProjectionProvider(nn.Module):
@@ -48,6 +51,9 @@ class RandomProjectionProvider(nn.Module):
     def statement_features(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor:
         del statement_id
         return self.statement_vectors[relation_id.clamp(0, self.statement_vectors.shape[0] - 1)]
+
+    def reconstruction_loss(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> None:
+        del relation_id, statement_id
 
 
 class RelationalAutoencoder(nn.Module):
@@ -80,15 +86,26 @@ def build_model(document: dict[str, Any], root: Path, edge_type_count: int, seed
     relation_count = document["relations"]
     counts, numeric = load_feature_metadata(root)
     torch.manual_seed(seed)
-    return RelationalAutoencoder(
-        encoder=RelationalAttentionEncoder(32, 16, edge_type_count),
-        decoder=ComplexDecoder(32, relation_count),
-        attributes=AuxiliaryAttributeDecoder(32, counts, numeric),
-        features=RandomProjectionProvider(32, 16, relation_count, seed),
-    )
+    encoder = RelationalAttentionEncoder(32, 16, edge_type_count)
+    decoder = ComplexDecoder(32, relation_count)
+    attributes = AuxiliaryAttributeDecoder(32, counts, numeric)
+    features: FeatureProvider
+    if document.get("semantic"):
+        store = SemanticFeatureStore.model_validate(document["semantic"])
+        features = SemanticFeatureProvider(32, 16, relation_count, seed, store, root)
+    else:
+        features = RandomProjectionProvider(32, 16, relation_count, seed)
+    return RelationalAutoencoder(encoder=encoder, decoder=decoder, attributes=attributes, features=features)
 
 
-def config_hash(document: dict[str, Any], *, learning_rate: float, seed: int, auxiliary_weight: float) -> str:
+def config_hash(
+    document: dict[str, Any],
+    *,
+    learning_rate: float,
+    seed: int,
+    auxiliary_weight: float,
+    semantic_weight: float = 0.1,
+) -> str:
     payload = {
         "dataset_id": document.get("dataset_id"),
         "snapshot_id": document.get("snapshot_id"),
@@ -97,6 +114,12 @@ def config_hash(document: dict[str, Any], *, learning_rate: float, seed: int, au
         "auxiliary_weight": auxiliary_weight,
         "model_version": 2,
     }
+    if document.get("semantic"):
+        payload.update(
+            model_version=3,
+            semantic_weight=semantic_weight,
+            semantic=document["semantic"],
+        )
     return hashlib.sha256(canonical_json(payload).encode()).hexdigest()
 
 
@@ -178,6 +201,7 @@ def train_step(
     *,
     device: torch.device,
     auxiliary_weight: float,
+    semantic_weight: float = 0.1,
     memory_reduction: int = 1,
     use_bf16: bool = False,
 ) -> float:
@@ -224,6 +248,9 @@ def train_step(
         scores = torch.cat((positive_scores, negative_scores))
         targets = torch.cat((torch.ones_like(positive_scores), torch.zeros_like(negative_scores)))
         loss = link_loss(scores, targets)
+        reconstruction = model.features.reconstruction_loss(relations, positive)
+        if reconstruction is not None:
+            loss = loss + semantic_weight * reconstruction
         if features is not None:
             states, categorical_fields, categorical_targets, numeric_fields, numeric_values, numeric_valid = (
                 _auxiliary_tensors(features, state, global_nodes, positive)
@@ -269,9 +296,12 @@ def train_batches(
     start_cursor: int = 0,
     max_batches: int | None = None,
     auxiliary_weight: float = 0.1,
+    semantic_weight: float = 0.1,
     edge_type_count: int | None = None,
     max_memory_reductions: int = 4,
 ) -> dict[str, Any]:
+    if semantic_weight < 0:
+        raise ValueError("semantic weight must be nonnegative")
     document = json.loads((root / "manifest.json").read_text())
     examples = [TrainingExample.model_validate(item) for item in document["batches"]]
     resolved_device = resolve_device(device)
@@ -286,7 +316,13 @@ def train_batches(
         if resolved_device.type == "cuda"
         else torch.optim.AdamW(model.parameters(), lr=learning_rate)
     )
-    identity = config_hash(document, learning_rate=learning_rate, seed=seed, auxiliary_weight=auxiliary_weight)
+    identity = config_hash(
+        document,
+        learning_rate=learning_rate,
+        seed=seed,
+        auxiliary_weight=auxiliary_weight,
+        semantic_weight=semantic_weight,
+    )
     metrics: dict[str, float] = {"loss": 0.0, "batches": 0.0}
     total = 0.0
     trained = 0
@@ -339,6 +375,7 @@ def train_batches(
                         features,
                         device=resolved_device,
                         auxiliary_weight=auxiliary_weight,
+                        semantic_weight=semantic_weight,
                         memory_reduction=reduction,
                         use_bf16=use_bf16,
                     )

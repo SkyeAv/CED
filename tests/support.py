@@ -71,7 +71,7 @@ def synthetic_dataset(root: Path, *, batches: int = 3, nodes_per_batch: int = 64
             return reference
 
         graph = GraphBatch(
-            global_node_id=save("global_node_id", np.zeros(nodes_per_batch, dtype=np.int64)),
+            global_node_id=save("global_node_id", np.arange(nodes_per_batch, dtype=np.int64) % 3),
             seed_id=save("seed_id", np.array([0], dtype=np.int64)),
             type_set_id=save("type_set_id", np.zeros(2, dtype=np.int64)),
             edge_index=save("edge_index", np.array([[0, 1], [1, 0]], dtype=np.int64)),

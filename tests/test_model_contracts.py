@@ -447,8 +447,8 @@ def test_sentence_transformer_encoder_uses_local_model(monkeypatch: pytest.Monke
     class FakeModel:
         max_seq_length = 0
 
-        def __init__(self, model: str, device: str, local_files_only: bool) -> None:
-            calls["init"] = (model, device, local_files_only)
+        def __init__(self, model: str, revision: str | None, device: str, local_files_only: bool) -> None:
+            calls["init"] = (model, revision, device, local_files_only)
 
         def get_sentence_embedding_dimension(self) -> int:
             return 4
@@ -460,10 +460,15 @@ def test_sentence_transformer_encoder_uses_local_model(monkeypatch: pytest.Monke
     module = types.SimpleNamespace(SentenceTransformer=FakeModel)
     monkeypatch.setitem(sys.modules, "sentence_transformers", module)
     settings = TextEncodingSettings(
-        provider="sentence_transformers", model="fixture/model", dimension=4, device="cpu", local_files_only=True
+        provider="sentence_transformers",
+        model="fixture/model",
+        revision="pinned-revision",
+        dimension=4,
+        device="cpu",
+        local_files_only=True,
     )
     encoder = SentenceTransformerTextEncoder(settings)
-    assert calls["init"] == ("fixture/model", "cpu", True)
+    assert calls["init"] == ("fixture/model", "pinned-revision", "cpu", True)
     assert encoder.model.max_seq_length == settings.max_length
     vectors = encoder.encode(["alpha"])
     assert vectors.shape == (1, 4)

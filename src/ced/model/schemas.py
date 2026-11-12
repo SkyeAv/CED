@@ -178,6 +178,38 @@ class IsolationTreePruningReport(ConfigBase):
     pruned_statements: int = Field(ge=0)
 
 
+class QualifierStatementCsr(ConfigBase):
+    statement_id: TensorRef
+    qualifier_id: TensorRef
+    indptr: TensorRef
+
+
+class SemanticFeatureStore(ConfigBase):
+    provider: str
+    model: str
+    revision: str | None = None
+    encoder_key: str
+    dimension: int = Field(gt=0)
+    relations: int = Field(gt=0)
+    qualifier_count: int = Field(ge=0)
+    predicate_text_path: str
+    qualifier_text_path: str
+    predicates: TensorRef
+    qualifiers: TensorRef
+    statement_qualifiers: QualifierStatementCsr
+
+    @model_validator(mode="after")
+    def semantic_shapes(self) -> SemanticFeatureStore:
+        if self.predicates.shape != [self.relations, self.dimension]:
+            raise ValueError("predicate embedding tensor does not match the relation vocabulary")
+        if self.qualifiers.shape != [self.qualifier_count, self.dimension]:
+            raise ValueError("qualifier embedding tensor does not match the qualifier vocabulary")
+        links = self.statement_qualifiers
+        if links.statement_id.shape != links.qualifier_id.shape or len(links.statement_id.shape) != 1:
+            raise ValueError("statement qualifier tensors must be aligned vectors")
+        return self
+
+
 class DatasetManifest(ConfigBase):
     schema_version: int = 2
     dataset_id: str
@@ -191,6 +223,7 @@ class DatasetManifest(ConfigBase):
     tensors: dict[str, TensorRef]
     feature_fields: list[FeatureFieldSpec] = Field(default_factory=list)
     features: FeatureStoreArtifact = Field(default_factory=FeatureStoreArtifact)
+    semantic: SemanticFeatureStore | None = None
     batches: list[TrainingExample] = Field(default_factory=list)
     vocabularies: dict[str, VocabularyArtifact] = Field(default_factory=dict)
     checksums: dict[str, str] = Field(default_factory=dict)
@@ -207,4 +240,9 @@ class DatasetManifest(ConfigBase):
         for key, shape in expected.items():
             if key not in self.tensors or self.tensors[key].shape != shape:
                 raise ValueError(f"unaligned topology tensor: {key}")
+        if self.semantic is not None:
+            if self.semantic.relations != self.relations:
+                raise ValueError("semantic relation count does not match the dataset")
+            if self.semantic.statement_qualifiers.indptr.shape != [self.statements + 1]:
+                raise ValueError("statement qualifier CSR does not match the dataset")
         return self
