@@ -7,6 +7,7 @@ cpu_workers: ${CED_CPU_WORKERS:-4}
 memory_limit: ${CED_MEMORY_LIMIT:-16GB}
 disk_reserve_gb: ${CED_DISK_RESERVE_GB:-32}
 download_connections: ${CED_DOWNLOAD_CONNECTIONS:-8}
+download_jobs: ${CED_DOWNLOAD_JOBS:-4}
 source_directory: src/ced/config/sources
 graph_config: src/ced/graphs/ced-graph.yaml
 modal:

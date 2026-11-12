@@ -1,0 +1,53 @@
+# Provenance evidence from the fetched 1.0.5 release: DISEASES is an aggregator. Sampled edges carry
+# sources[].resource_role aggregator_knowledge_source = infores:diseases next to a
+# primary_knowledge_source of infores:medlineplus or infores:amyco, so provided_by names the release
+# provider while per-statement origins stay in the preserved `sources` attribute.
+schema_version: 1
+name: diseases
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: DISEASES Translator KGX
+  description: JensenLab DISEASES gene-disease associations, Translator release 1.0.5, conflated normalization.
+  homepage: https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/
+  license_name: 'CC-BY-4.0'
+  license_url: https://creativecommons.org/licenses/by/4.0/
+  provided_by: infores:diseases
+  citations:
+    ['DISEASES source version 2026_10_16', 'Translator release 1.0.5', 'https://doi.org/10.1093/database/baac019']
+artifacts:
+  - path: diseases.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/diseases.tar.zst']
+    size: 453772
+    sha256: 8702f73bbfc298b04959d884147fa88044d6b0310fd66c3454110e2561d1fa75
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.jsonl', '*nodes*.ndjson']
+        edges: ['*edges*.jsonl', '*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 268435456
+      max_total_bytes: 268435456
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/release-metadata.json']
+    size: 702
+    sha256: a50211a1c016b962811ce075d00121ac0e21e1820ff49e0633eedd95f7a8345e
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/graph-metadata.json']
+    size: 5806
+    sha256: 902056d47742692459dafcf427dbb4c75b80966cae413f0fe740674ab6f885a9
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/diseases/1.0.5/test-data.json']
+    size: 489
+    sha256: 0eef8af597a79dd9d60b68eb69edbbeeb11316b91774e08148345938df8ef1f2
+mapping:
+  options:
+    upstream_conflated: true

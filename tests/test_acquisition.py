@@ -1,7 +1,10 @@
 import hashlib
 import io
+import json
+import logging
 import subprocess
 import tarfile
+import threading
 from pathlib import Path
 
 import pytest
@@ -11,7 +14,7 @@ from ced.acquisition.archive import extract_archive
 from ced.acquisition.aria2 import Aria2Backend
 from ced.acquisition.base import FetchedArtifact
 from ced.acquisition.huggingface import HuggingFaceBackend
-from ced.acquisition.pipeline import PreparedSource, fetch_sources
+from ced.acquisition.pipeline import PreparedSource, fetch_sources, materialize_source, parallel_map
 from ced.config.models import RuntimeConfig
 from ced.config.sources import (
     ArchiveSpec,
@@ -19,6 +22,7 @@ from ced.config.sources import (
     ArtifactInventorySpec,
     ArtifactSpec,
     HuggingFaceAcquisition,
+    LocalAcquisition,
     ProvenanceConfig,
     SourceConfig,
     load_sources,
@@ -194,8 +198,22 @@ def test_archive_rejects_links(tmp_path: Path) -> None:
     archive = tmp_path / "fixture.tar.zst"
     make_archive(archive, symlink=True)
     spec = ArchiveSpec(format="tar.zst", members={"nodes": ["nodes.ndjson"], "edges": ["edges.ndjson"]})
-    with pytest.raises(RuntimeError, match="safe archive extraction failed"):
+    with pytest.raises(RuntimeError, match=r"safe archive extraction of fixture\.tar\.zst failed") as failure:
         extract_archive(archive, spec, tmp_path / "bad")
+    assert isinstance(failure.value.__cause__, ValueError)
+    assert "archive links/devices are forbidden" in str(failure.value)
+
+
+def test_archive_names_roles_whose_patterns_match_nothing(tmp_path: Path) -> None:
+    """The real Translator releases ship nodes.jsonl, so a stale *.ndjson pattern matched nothing;
+    the failure has to name the unmatched role and the archive instead of hiding the cause."""
+    archive = tmp_path / "fixture.tar.zst"
+    make_archive(archive)
+    spec = ArchiveSpec(format="tar.zst", members={"nodes": ["*.jsonl"], "edges": ["edges.ndjson"]})
+    with pytest.raises(RuntimeError, match=r"safe archive extraction of fixture\.tar\.zst failed") as failure:
+        extract_archive(archive, spec, tmp_path / "missing")
+    assert "archive roles have no members: nodes" in str(failure.value)
+    assert (tmp_path / "missing").exists() is False
 
 
 def test_large_download_requires_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,3 +224,123 @@ def test_large_download_requires_approval(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr("ced.acquisition.pipeline.prepare_source", lambda *args, **kwargs: prepared)
     with pytest.raises(RuntimeError, match="--yes"):
         fetch_sources(runtime(tmp_path), ["fixture"], all_enabled=False, assume_yes=False)
+
+
+class RecordingBackend:
+    """Stand-in acquisition backend proving bounded concurrency with a barrier.
+
+    A barrier sized to the expected in-flight count fails loudly (BrokenBarrierError)
+    when fewer tasks overlap, so a regression back to serial fetching cannot pass by luck.
+    """
+
+    def __init__(self, config: RuntimeConfig, payloads: dict[str, bytes], barrier: threading.Barrier) -> None:
+        self.runtime = config
+        self.payloads = payloads
+        self.barrier = barrier
+        self.requests: list[str] = []
+        self.lock = threading.Lock()
+
+    def fetch(self, artifact: ArtifactSpec, *, allow_download: bool) -> FetchedArtifact:
+        with self.lock:
+            self.requests.append(artifact.path)
+        self.barrier.wait()
+        destination = self.runtime.artifact_path("downloads", "fixture", artifact.path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(self.payloads[artifact.path])
+        return FetchedArtifact.from_path(
+            SourceConfig(
+                name="fixture",
+                adapter="kgx_ndjson",
+                acquisition=LocalAcquisition(backend="local", root=self.runtime.remote_project),
+                provenance=ProvenanceConfig(title="Fixture", license_name="CC0-1.0", provided_by="infores:fixture"),
+                artifacts=[artifact],
+            ),
+            artifact,
+            destination,
+            f"fixture://{artifact.path}",
+        )
+
+
+def test_parallel_map_keeps_input_order_and_proves_overlap() -> None:
+    """Fetch manifests must be deterministic while downloads overlap; a barrier proves the
+    overlap actually happens instead of relying on timing, which can be flaky on a busy host."""
+    barrier = threading.Barrier(3, timeout=30)
+
+    def worker(index: int) -> int:
+        barrier.wait()
+        return index * 2
+
+    assert parallel_map(list(range(9)), worker, max_workers=3) == [index * 2 for index in range(9)]
+    assert parallel_map([], worker, max_workers=3) == []
+
+
+def test_parallel_map_reraises_first_failure_in_input_order(caplog: pytest.LogCaptureFixture) -> None:
+    """locate_source turns the cold-cache FileNotFoundError into a fetch instruction; that
+    contract survives concurrent fetching only if the first failure keeps its type and order."""
+
+    def worker(index: int) -> int:
+        if index == 1:
+            raise FileNotFoundError("cold cache")
+        if index == 2:
+            raise ValueError("corrupt")
+        return index
+
+    with (
+        caplog.at_level(logging.WARNING, logger="ced.acquisition.pipeline"),
+        pytest.raises(FileNotFoundError, match="cold cache"),
+    ):
+        parallel_map(list(range(4)), worker, max_workers=2)
+    assert any("corrupt" in record.getMessage() for record in caplog.records)
+
+
+def named_source(name: str, artifacts: list[ArtifactSpec]) -> SourceConfig:
+    return SourceConfig(
+        name=name,
+        adapter="kgx_ndjson",
+        acquisition=LocalAcquisition(backend="local", root=Path("/tmp")),
+        provenance=ProvenanceConfig(title="Fixture", license_name="CC0-1.0", provided_by="infores:fixture"),
+        artifacts=artifacts,
+    )
+
+
+def test_materialize_source_fetches_artifacts_concurrently(tmp_path: Path) -> None:
+    """A Translator release ships four artifacts at once; fetching them one by one wastes the
+    link, so materialize_source must overlap artifacts up to download_jobs."""
+    config = RuntimeConfig(remote_project=tmp_path, artifact_root=Path(".ced"), disk_reserve_gb=0, download_jobs=3)
+    payloads = {f"part-{index}.ndjson": PAYLOAD for index in range(6)}
+    artifacts = [ArtifactSpec(path=path, role="nodes", sha256=DIGEST) for path in payloads]
+    backend = RecordingBackend(config, payloads, threading.Barrier(3, timeout=30))
+    result = materialize_source(
+        PreparedSource(named_source("fixture", artifacts), backend, artifacts), allow_download=True
+    )
+    assert [artifact.path.name for artifact in result.files["nodes"]] == list(payloads)
+
+
+def test_fetch_sources_overlaps_sources_and_writes_ordered_manifests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The task pool spans sources, not just artifacts: otherwise one large archive (ubergraph
+    is ~399 MiB) serializes every smaller source behind it, and manifests must still list
+    artifacts in declaration order because completion order is now arbitrary."""
+    config = RuntimeConfig(remote_project=tmp_path, artifact_root=Path(".ced"), disk_reserve_gb=0, download_jobs=4)
+    backends: dict[str, RecordingBackend] = {}
+    sources = {}
+    barrier = threading.Barrier(4, timeout=30)
+    for name in ("alpha", "beta"):
+        artifacts = [
+            ArtifactSpec(path=f"{name}-first.ndjson", role="nodes", sha256=DIGEST),
+            ArtifactSpec(path=f"{name}-second.ndjson", role="nodes", sha256=DIGEST),
+        ]
+        sources[name] = named_source(name, artifacts)
+        backends[name] = RecordingBackend(config, {artifact.path: PAYLOAD for artifact in artifacts}, barrier)
+    monkeypatch.setattr("ced.acquisition.pipeline.require_cpu_worker", lambda runtime: None)
+    monkeypatch.setattr("ced.acquisition.pipeline.load_sources", lambda path: sources)
+    monkeypatch.setattr("ced.acquisition.pipeline._backend", lambda runtime, source: backends[source.name])
+    fetch_sources(config, ["alpha", "beta"], all_enabled=False, assume_yes=False)
+    for name, backend in backends.items():
+        assert len(backend.requests) == 2
+        report = json.loads(config.artifact_path("downloads", name, "fetch-manifest.json").read_text(encoding="utf-8"))
+        assert [item["origin"] for item in report["files"]["nodes"]] == [
+            f"fixture://{name}-first.ndjson",
+            f"fixture://{name}-second.ndjson",
+        ]

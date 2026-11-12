@@ -91,8 +91,11 @@ def extract_archive(archive: Path, spec: ArchiveSpec, destination: Path) -> dict
             raise ValueError(f"archive roles have no members: {', '.join(sorted(missing))}")
         atomic_write_json(temporary / _MANIFEST, {"members": members})
         temporary.replace(destination)
-    except Exception:
-        raise RuntimeError(f"safe archive extraction failed; temporary files retained at {temporary}") from None
+    except Exception as error:
+        # The retained temporary directory is evidence; the cause is what makes it actionable.
+        raise RuntimeError(
+            f"safe archive extraction of {archive.name} failed ({error}); temporary files retained at {temporary}"
+        ) from error
     result = _existing(destination)
     if result is None:
         raise RuntimeError("archive manifest was not written")

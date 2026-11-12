@@ -1,0 +1,48 @@
+schema_version: 1
+name: sider
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: SIDER Translator KGX
+  description: SIDER 4.1 drug side-effect pairs, Translator release 1.0.2; non-commercial reuse only.
+  homepage: https://kgx-storage.ci.transltr.io/releases/sider/1.0.2/
+  license_name: 'CC-BY-NC-SA-4.0'
+  license_url: https://creativecommons.org/licenses/by-nc-sa/4.0/
+  provided_by: infores:sider
+  citations: ['SIDER source version 4.1', 'Translator release 1.0.2', 'https://doi.org/10.1093/nar/gkv1075']
+artifacts:
+  - path: sider.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/sider/1.0.2/sider.tar.zst']
+    size: 6017494
+    sha256: b1f958f6a94c36111ee43b6446af01fae04737e15cbb6f3c733a8d2431d91986
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.jsonl', '*nodes*.ndjson']
+        edges: ['*edges*.jsonl', '*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 1073741824
+      max_total_bytes: 1073741824
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/sider/1.0.2/release-metadata.json']
+    size: 679
+    sha256: 73ff5991a3819bef1ce29ca6e4d14ee2c399dd2763ba8d5c0ac9fffa285751cf
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/sider/1.0.2/graph-metadata.json']
+    size: 35794
+    sha256: a0f644dbaae3307f7ca97df4eaa929f5bf907225a8d058f2914f40b104f88017
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/sider/1.0.2/test-data.json']
+    size: 6911
+    sha256: 1ad13d6ee53f5debccc8801c2c8c8970b262d0171535c9712bb33faf631b007e
+mapping:
+  options:
+    upstream_conflated: true

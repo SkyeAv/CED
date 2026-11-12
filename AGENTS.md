@@ -21,7 +21,9 @@ ced sync                 # sync source/config/lockfiles; never delete or expose 
 ced check                # remote Ruff, Pyright, pytest, uv lock, and YAML gate
 ced sources list         # inspect declarative sources without downloading them
 ced fetch --source chembl
+ced fetch --group translator
 ced build --source ced --fullmap-path /home/sgoetz/Desktop/fullmap
+ced build --group translator
 ced prepare <snapshot-id>
 ced encode-text <dataset-id> --provider random
 ced train <dataset-id> --epochs 1 --seed 20261110 --yes
@@ -48,7 +50,7 @@ Do not run those remote debugging commands locally. Do not let a local commit ho
 | Path | Responsibility |
 | --- | --- |
 | `src/ced/config/` | typed runtime and declarative source YAML; source specifics belong here |
-| `src/ced/acquisition/` | HF, aria2, local, and safe archive acquisition behind shared protocols |
+| `src/ced/acquisition/` | HF, aria2, segmented HTTP, local, and safe archive acquisition behind shared protocols |
 | `src/ced/graphs/` | CED graph config and curated tables, recursively including `families/` and `books/` |
 | `src/ced/kg/` | narrow Tablassert compatibility adapter, source adapters, canonical records, streaming merge |
 | `src/ced/model/` | raw/numeric tensor contracts, features, splits, encoder, decoder, training, evaluation |

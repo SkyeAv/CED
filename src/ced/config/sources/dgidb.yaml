@@ -1,0 +1,48 @@
+schema_version: 1
+name: dgidb
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: DGIdb Translator KGX
+  description: DGIdb drug-gene interactions; CC0 except where imported sources impose restrictions.
+  homepage: https://kgx-storage.ci.transltr.io/releases/dgidb/1.0.3/
+  license_name: 'CC0-1.0'
+  license_url: https://dgidb.org/about/overview/data-accessibility
+  provided_by: infores:dgidb
+  citations: ['DGIdb source version 2026-10', 'Translator release 1.0.3', 'https://doi.org/10.1093/nar/gkad1040']
+artifacts:
+  - path: dgidb.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/dgidb/1.0.3/dgidb.tar.zst']
+    size: 4584342
+    sha256: 32147d78ea8a8de238af9760fcaf9907be6b603e950a98e29473fd980cd14513
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.jsonl', '*nodes*.ndjson']
+        edges: ['*edges*.jsonl', '*edges*.ndjson']
+      max_members: 16
+      max_member_bytes: 536870912
+      max_total_bytes: 536870912
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/dgidb/1.0.3/release-metadata.json']
+    size: 687
+    sha256: 350a0f2af59c5144f5426db4ab53676c2d66fa4e66de017333a7fb89dc5649d0
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/dgidb/1.0.3/graph-metadata.json']
+    size: 52183
+    sha256: 2180da1148f908424cce03ab5f934e5ceff75ecc2a0e8b79084ad673a851a6af
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/dgidb/1.0.3/test-data.json']
+    size: 12845
+    sha256: 4a7e9cf120c9c0441b62f707582380f9d231e767fc4d9914191a70e662843fd3
+mapping:
+  options:
+    upstream_conflated: true

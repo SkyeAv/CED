@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -68,13 +69,22 @@ class Aria2Acquisition(ConfigBase):
     headers: dict[str, str] = Field(default_factory=dict)
 
 
+class HttpAcquisition(ConfigBase):
+    backend: Literal["http"]
+    connections: int | None = Field(default=None, ge=1, le=32)
+    headers: dict[str, str] = Field(default_factory=dict)
+    segment_bytes: int | None = Field(default=None, ge=1024, le=1024**3)
+    max_tries: int = Field(default=5, ge=1, le=10)
+    retry_wait_seconds: float = Field(default=5, gt=0, le=300)
+
+
 class LocalAcquisition(ConfigBase):
     backend: Literal["local"]
     root: Path
 
 
 AcquisitionConfig = Annotated[
-    HuggingFaceAcquisition | Aria2Acquisition | LocalAcquisition, Field(discriminator="backend")
+    HuggingFaceAcquisition | Aria2Acquisition | HttpAcquisition | LocalAcquisition, Field(discriminator="backend")
 ]
 
 
@@ -99,6 +109,7 @@ class SourceConfig(ConfigBase):
     name: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     enabled: bool = True
     adapter: str
+    groups: list[str] = Field(default_factory=list)
     acquisition: AcquisitionConfig
     provenance: ProvenanceConfig
     graph: Path | None = None
@@ -115,6 +126,9 @@ class SourceConfig(ConfigBase):
         paths = [artifact.path for artifact in self.artifacts]
         if len(paths) != len(set(paths)):
             raise ValueError("artifact paths must be unique")
+        invalid_groups = [group for group in self.groups if not re.fullmatch(r"[a-z][a-z0-9-]*", group)]
+        if invalid_groups:
+            raise ValueError(f"invalid source groups: {', '.join(invalid_groups)}")
         return self
 
 
@@ -133,16 +147,33 @@ def load_sources(directory: Path) -> dict[str, SourceConfig]:
 
 
 def select_sources(
-    sources: dict[str, SourceConfig], names: list[str], *, all_enabled: bool = False, require_explicit: bool = False
+    sources: dict[str, SourceConfig],
+    names: list[str] | None,
+    *,
+    all_enabled: bool = False,
+    groups: list[str] | None = None,
+    require_explicit: bool = False,
 ) -> list[SourceConfig]:
-    if names and all_enabled:
-        raise ValueError("use --source or --all-enabled, not both")
-    if require_explicit and not names and not all_enabled:
-        raise ValueError("fetch requires --source or --all-enabled")
-    unknown = set(names) - set(sources)
-    if unknown:
-        raise ValueError(f"unknown sources: {', '.join(sorted(unknown))}")
-    selected = [sources[name] for name in names] if names else [source for source in sources.values() if source.enabled]
+    """Resolve exactly one selection mode: explicit names, groups, or every enabled source."""
+    modes = [bool(names), bool(groups), all_enabled]
+    if sum(modes) > 1:
+        raise ValueError("select sources by name, by group, or by --all-enabled, but not more than one")
+    if require_explicit and not any(modes):
+        raise ValueError("fetch requires --source, --group or --all-enabled")
+    if names:
+        unknown = sorted(set(names) - set(sources))
+        if unknown:
+            raise ValueError(f"unknown sources: {', '.join(unknown)}")
+        selected = [sources[name] for name in names]
+    elif groups:
+        declared = {group for source in sources.values() for group in source.groups}
+        unknown = sorted(set(groups) - declared)
+        if unknown:
+            raise ValueError(f"unknown groups: {', '.join(unknown)}")
+        wanted = set(groups)
+        selected = [source for source in sources.values() if source.enabled and wanted & set(source.groups)]
+    else:
+        selected = [source for source in sources.values() if source.enabled]
     if not selected:
         raise ValueError("no sources selected")
     disabled = [source.name for source in selected if not source.enabled]

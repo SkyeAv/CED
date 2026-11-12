@@ -10,9 +10,24 @@ from ced.kg.records import canonical_json
 from ced.kg.writer import NODE_SCHEMA, NdjsonShardWriter, ParquetShardWriter
 
 
+def raw_files(root: Path, name: str) -> list[str]:
+    """Every raw partition for one table, in a deterministic order.
+
+    Canonicalization writes one partition per source (`raw/<source>/<table>/`), while callers
+    that merge a hand-built `raw/<table>/` tree still work; both layouts are accepted and the
+    sorted union keeps merge output independent of how many workers produced it.
+    """
+    files = sorted((root / "raw" / name).glob("*.parquet"))
+    files += sorted((root / "raw").glob(f"*/{name}/*.parquet"))
+    unique = list(dict.fromkeys(files))
+    if not unique:
+        raise FileNotFoundError(f"no raw parquet files for {name} under {root / 'raw'}")
+    return [str(path) for path in unique]
+
+
 def merge_nodes(root: Path, connection: duckdb.DuckDBPyConnection, *, group_rows: int = 5000) -> int:
     """External sort, then reduce one canonical identity at a time."""
-    connection.read_parquet(str(root / "raw/nodes/*.parquet")).create_view("raw_nodes")
+    connection.read_parquet(raw_files(root, "nodes")).create_view("raw_nodes")
     reader = connection.execute(
         "SELECT * FROM raw_nodes ORDER BY id, native_ids_json, attributes_json"
     ).fetch_record_batch(group_rows)
@@ -68,9 +83,10 @@ def merge_graph(root: Path, *, threads: int = 4, memory: str = "4GB") -> dict[st
         connection.execute(f"SET threads={threads}")
         connection.execute("SET memory_limit=?", [memory])
         connection.execute("SET temp_directory=?", [str(temporary)])
+        connection.execute("SET preserve_insertion_order=false")
         counts = {"nodes": merge_nodes(root, connection)}
         for name in ("statements", "attributes", "node_identities", "predicates", "ontology_terms", "conflicts"):
-            connection.read_parquet(str(root / f"raw/{name}/*.parquet")).create_view(f"raw_{name}")
+            connection.read_parquet(raw_files(root, name)).create_view(f"raw_{name}")
         collision = connection.execute("""
             SELECT id FROM raw_node_identities WHERE mapping_status IN ('local', 'unresolved_local')
             GROUP BY id HAVING count(DISTINCT lower(trim(original_label))) > 1 LIMIT 1

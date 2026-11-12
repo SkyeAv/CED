@@ -1,0 +1,49 @@
+schema_version: 1
+name: ubergraph
+enabled: true
+adapter: kgx_ndjson
+groups: [translator]
+acquisition:
+  backend: http
+  connections: 8
+provenance:
+  title: Ubergraph Translator KGX
+  description: Ubergraph inference-closure ontology graph, Translator release 1.0.4 with strict conflated normalization.
+  homepage: https://kgx-storage.ci.transltr.io/releases/ubergraph/1.0.4/
+  license_name: 'CC0-1.0'
+  license_url: https://raw.githubusercontent.com/INCATools/ubergraph/master/LICENSE.txt
+  provided_by: infores:ubergraph
+  citations:
+    ['Ubergraph source version 2026-10-02', 'Translator release 1.0.4', 'Balhoff JP, et al. Ubergraph. bioRxiv. 2022.']
+artifacts:
+  - path: ubergraph.tar.zst
+    role: kgx_archive
+    urls: ['https://kgx-storage.ci.transltr.io/releases/ubergraph/1.0.4/ubergraph.tar.zst']
+    size: 398820879
+    sha256: 8146aea5334aaa57f620d669f2eade8dde66033032453ba4345a602bab060435
+    archive:
+      format: tar.zst
+      members:
+        nodes: ['*nodes*.jsonl', '*nodes*.ndjson']
+        edges: ['*edges*.jsonl', '*edges*.ndjson']
+      max_members: 32
+      max_member_bytes: 17179869184
+      max_total_bytes: 17179869184
+  - path: release-metadata.json
+    role: release_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/ubergraph/1.0.4/release-metadata.json']
+    size: 705
+    sha256: d82a79fd5338e5450a70a84a61d175fd7750263c283df0a46580da124d08b73c
+  - path: graph-metadata.json
+    role: graph_metadata
+    urls: ['https://kgx-storage.ci.transltr.io/releases/ubergraph/1.0.4/graph-metadata.json']
+    size: 71529
+    sha256: f4c7c99eac412f3e76c1cfd8384dd0f65c8b28a241a8a5c78d141050c55cc959
+  - path: test-data.json
+    role: test_data
+    urls: ['https://kgx-storage.ci.transltr.io/releases/ubergraph/1.0.4/test-data.json']
+    size: 14652
+    sha256: eb769b1a1b5c4b80bb1b2e642629ca93d65ef4d1b391016c927095349d18c98e
+mapping:
+  options:
+    upstream_conflated: true

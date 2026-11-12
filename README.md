@@ -32,7 +32,9 @@ Important environment variables:
 | `CED_ARTIFACT_ROOT` | Gitignored artifact directory, relative to the remote project |
 | `CED_FULLMAP` | Existing fullmap database path |
 | `CED_CPU_WORKERS` | Hard CPU worker cap; must remain `4` |
-| `CED_MEMORY_LIMIT` | DuckDB memory cap |
+| `CED_DOWNLOAD_JOBS` | Artifacts downloaded concurrently by `ced fetch`; `1`-`4` |
+| `CED_DOWNLOAD_CONNECTIONS` | Connections per file for `aria2`, and the segment cap for `http`; `1`-`32` |
+| `CED_MEMORY_LIMIT` | Process memory budget for canonicalization, merge, and reports |
 | `CED_DISK_RESERVE_GB` | Minimum free disk before downloads/builds |
 | `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` | Modal credentials, only in the untracked remote environment |
 
@@ -42,7 +44,9 @@ Important environment variables:
 ced config validate
 ced sources list
 ced fetch --source chembl --yes
+ced fetch --group translator
 ced build --source ced --source amalgam --fullmap-path /home/sgoetz/Desktop/fullmap
+ced build --group translator
 ced prepare <snapshot-id>
 ced encode-text <dataset-id> --provider random
 ced train <dataset-id> --epochs 1 --seed 20261110 --yes
@@ -51,6 +55,21 @@ ced evaluate <run-id> --split test --ranking exact --yes
 ```
 
 `ced check` runs the full remote gate: `uv lock --check`, Ruff, Pyright, pytest, and strict YAML lint. Default pytest excludes `network`, `gpu`, and `fullmap` tests.
+
+## Acquisition and concurrency
+
+Sources declare one of four backends: `local`, `huggingface`, `aria2`, and `http`. The `http` backend is dependency-free and segmented: it probes with `Range`, splits each artifact into `segment_bytes` chunks (default 16 MiB) up to `CED_DOWNLOAD_CONNECTIONS`, retries transient failures with exponential backoff, resumes an interrupted partial, and verifies the declared size and SHA-256 before an atomic rename into the store. Pre-signed query strings never reach logs, exceptions, or manifests. `src/ced/acquisition/README.md` documents the boundary in full.
+
+`ced build` canonicalizes each selected source in its own worker process, writing `raw/<source>/` partitions under the snapshot staging directory, with the biolink vocabulary in `raw/_ontology`. `CED_MEMORY_LIMIT` is divided across those workers so the pool stays inside the configured ceiling. The serial merge and report stages give DuckDB 75% of that budget, leaving 25% for Python, Arrow, and allocations outside DuckDB's buffer manager. Merge reads the sorted union of every partition, so counts and merged output do not depend on the worker count. A source that fails canonicalization raises an error naming that source, and no snapshot is promoted.
+
+The 13 Translator KGX releases are declared as the `translator` group (623 MiB total). Fetch them, then build them:
+
+```sh
+ced fetch --group translator
+ced build --group translator
+```
+
+Every artifact in those sources is pinned to a concrete release directory with the exact byte size reported by the release host, so `/latest/` can never move underneath a build. Groups are declarative (`groups:` in the source YAML); an unknown group name fails loudly instead of selecting nothing. `--source`, `--group`, and `--all-enabled` are mutually exclusive, `fetch` requires exactly one of them, and a selection above 1 GiB needs `--yes`.
 
 ## Artifact layout
 
