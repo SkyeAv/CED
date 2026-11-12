@@ -1,5 +1,5 @@
 # Format, lint, and stage changed YAML before each commit.
-default_install_hook_types = ["pre-commit"]
+default_install_hook_types = ["pre-commit", "pre-push"]
 
 [[repos]]
 repo = "local"
@@ -12,3 +12,15 @@ language = "system"
 types = ["yaml"]
 pass_filenames = true
 stages = ["pre-commit"]
+
+# The laptop bypasses this hook with `git push --no-verify`; all checks still run
+# explicitly through `ced check`. After `uv run prek install`, a normal push on
+# wenceslaus runs the full gate.
+[[repos.hooks]]
+id = "wenceslaus-check"
+name = "wenceslaus CI"
+entry = "env CED_REMOTE_WORKER=1 uv run --no-sync ced check"
+language = "system"
+pass_filenames = false
+always_run = true
+stages = ["pre-push"]

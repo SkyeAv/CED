@@ -55,7 +55,7 @@ def run_quality_gate(config: RuntimeConfig) -> None:
         ["uv", "run", "--no-sync", "ruff", "check", "."],
         ["uv", "run", "--no-sync", "ruff", "format", "--check", "."],
         ["uv", "run", "--no-sync", "pyright"],
-        ["uv", "run", "--no-sync", "pytest"],
+        ["uv", "run", "--no-sync", "pytest", "-n", str(config.cpu_workers)],
     ]
     yaml_files = sorted(
         str(path) for root in (Path("src"), Path("tests")) if root.exists() for path in root.rglob("*.yaml")
@@ -67,4 +67,9 @@ def run_quality_gate(config: RuntimeConfig) -> None:
     environment = os.environ | config.worker_environment
     for command in commands:
         LOGGER.info("remote gate: %s", shlex.join(command))
-        subprocess.run(command, check=True, env=environment)
+        command_environment = environment
+        if command[:4] == ["uv", "run", "--no-sync", "pytest"]:
+            command_environment = environment | {
+                name: "1" for name in config.worker_environment if name.endswith("THREADS")
+            }
+        subprocess.run(command, check=True, env=command_environment)
