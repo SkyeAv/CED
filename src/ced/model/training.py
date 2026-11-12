@@ -14,11 +14,12 @@ from torch import nn
 from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.kg.records import canonical_json
 from ced.model.decoder import ComplexDecoder
+from ced.model.dense_features import RandomProjectionProvider, SemanticFeatureProvider
 from ced.model.encoder import RelationalAttentionEncoder
 from ced.model.feature_index import FeatureIndex, load_feature_metadata
 from ced.model.losses import AuxiliaryAttributeDecoder, auxiliary_loss, link_loss
 from ced.model.schemas import GraphBatch, SemanticFeatureStore, TensorRef, TrainingExample
-from ced.model.semantic import SemanticFeatureProvider
+from ced.model.semantic import SemanticFeatureProvider as StatementSemanticFeatureProvider
 
 Device = Literal["auto", "cpu", "cuda"]
 
@@ -29,31 +30,6 @@ class FeatureProvider(Protocol):
     def statement_features(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor: ...
 
     def reconstruction_loss(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor | None: ...
-
-
-class RandomProjectionProvider(nn.Module):
-    """Deterministic temporary provider; semantic providers remain swappable."""
-
-    node_vectors: torch.Tensor
-    statement_vectors: torch.Tensor
-
-    def __init__(self, dimension: int, statement_dimension: int, relations: int, seed: int) -> None:
-        super().__init__()
-        generator = torch.Generator().manual_seed(seed)
-        self.register_buffer("node_vectors", torch.randn(65_536, dimension, generator=generator))
-        self.register_buffer(
-            "statement_vectors", torch.randn(max(1, 2 * relations), statement_dimension, generator=generator)
-        )
-
-    def node_features(self, global_node_id: torch.Tensor) -> torch.Tensor:
-        return self.node_vectors[global_node_id % self.node_vectors.shape[0]]
-
-    def statement_features(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor:
-        del statement_id
-        return self.statement_vectors[relation_id.clamp(0, self.statement_vectors.shape[0] - 1)]
-
-    def reconstruction_loss(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> None:
-        del relation_id, statement_id
 
 
 class RelationalAutoencoder(nn.Module):
@@ -92,9 +68,14 @@ def build_model(document: dict[str, Any], root: Path, edge_type_count: int, seed
     features: FeatureProvider
     if document.get("semantic"):
         store = SemanticFeatureStore.model_validate(document["semantic"])
-        features = SemanticFeatureProvider(32, 16, relation_count, seed, store, root)
+        features = StatementSemanticFeatureProvider(32, 16, relation_count, seed, store, root)
     else:
         features = RandomProjectionProvider(32, 16, relation_count, seed)
+    dense = document.get("features", {}).get("dense")
+    if dense is not None:
+        if dense.get("schema_version") != 1:
+            raise ValueError("legacy dense features require re-running ced encode-text")
+        features = SemanticFeatureProvider(document, root, seed, fallback=features)
     return RelationalAutoencoder(encoder=encoder, decoder=decoder, attributes=attributes, features=features)
 
 
@@ -120,6 +101,9 @@ def config_hash(
             semantic_weight=semantic_weight,
             semantic=document["semantic"],
         )
+    dense = document.get("features", {}).get("dense")
+    if dense is not None:
+        payload["text_encoder"] = dense["encoder_key"]
     return hashlib.sha256(canonical_json(payload).encode()).hexdigest()
 
 
@@ -205,6 +189,9 @@ def train_step(
     memory_reduction: int = 1,
     use_bf16: bool = False,
 ) -> float:
+    reset_feature_loss = getattr(model.features, "reset_autoencoder_loss", None)
+    if callable(reset_feature_loss):
+        reset_feature_loss()
     edge_index = _load(graph.edge_index, root, device)
     relation_id = _load(graph.relation_id, root, device)
     edge_type_id = _load(graph.edge_type_id, root, device)

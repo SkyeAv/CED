@@ -12,10 +12,19 @@ import pyarrow.parquet as pq
 from ced.acquisition.base import sha256_file
 from ced.config.models import RuntimeConfig
 from ced.kg.audit import validate_checksums
-from ced.model.encoding import TextEmbeddingCache, TextEncoder, encode_batches, encoder_key
+from ced.model.encoding import (
+    TextEmbeddingCache,
+    TextEncoder,
+    encode_batches,
+    encoder_key,
+    encoding_dimension,
+    encoding_model,
+    settings_batch_size,
+)
 from ced.model.feature_store import _convert_parquet_tensor, write_indptr
 from ced.model.schemas import QualifierStatementCsr, SemanticFeatureStore, TensorRef
 from ced.model.tensors import read_tensor, write_tensor_stream
+from ced.preflight import require_disk
 
 _ARTIFACTS = (
     "predicate-text.parquet",
@@ -135,7 +144,10 @@ def encode_semantic_features(
     source: Path,
     connection: duckdb.DuckDBPyConnection,
     cache: TextEmbeddingCache,
-    encoder: TextEncoder,
+    encoder: TextEncoder | None,
+    *,
+    additional_records: Path | None = None,
+    assume_yes: bool = False,
 ) -> SemanticFeatureStore:
     """Encode every predicate and qualifier key-value pair into dataset-local tensors."""
     validate_checksums(source, json.loads((source / "checksums.json").read_text()))
@@ -217,14 +229,27 @@ def encode_semantic_features(
 
         cache.create_index(connection)
         missing = work / "semantic-missing.parquet"
+        all_records = f"SELECT text FROM read_parquet('{records}')"
+        if additional_records is not None:
+            all_records += f" UNION ALL SELECT text FROM read_parquet('{additional_records}')"
         connection.execute(
             f"""COPY (SELECT DISTINCT sha256(r.text) AS text_sha256, r.text
-                      FROM read_parquet('{records}') r
+                      FROM ({all_records}) r
                       WHERE NOT EXISTS (SELECT 1 FROM cache_index c WHERE c.text_sha256=sha256(r.text))
                       ORDER BY text_sha256)
             TO '{missing}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
         )
-        cache.append_stream(encode_batches(missing, encoder, settings.batch_size))
+        dimension = encoding_dimension(settings)
+        if _rows(missing):
+            require_disk(runtime.artifact_path(), _rows(missing) * dimension * 8, runtime.disk_reserve_gb)
+            if settings.provider == "modal_ensemble":
+                from ced.modal_app import encode_text_remote
+
+                encode_text_remote(runtime, missing, cache, assume_yes=assume_yes)
+            else:
+                if encoder is None:
+                    raise ValueError("local text encoding requires an encoder")
+                cache.append_stream(encode_batches(missing, encoder, settings_batch_size(settings)))
         cache.create_index(connection)
         index = work / "semantic-index.parquet"
         connection.execute(
@@ -236,12 +261,12 @@ def encode_semantic_features(
         )
         if _rows(index) != relation_count + qualifiers:
             raise ValueError("semantic text records did not resolve to cached embeddings")
-        _write_cached_vectors(connection, cache, index, work / "semantic-vectors.parquet", encoder.dimension)
+        _write_cached_vectors(connection, cache, index, work / "semantic-vectors.parquet", dimension)
         predicate_ref = _write_embeddings(
-            connection, work, "predicate", "predicate-embeddings.safetensors", relation_count, encoder.dimension
+            connection, work, "predicate", "predicate-embeddings.safetensors", relation_count, dimension
         )
         qualifier_ref = _write_embeddings(
-            connection, work, "qualifier", "qualifier-embeddings.safetensors", qualifiers, encoder.dimension
+            connection, work, "qualifier", "qualifier-embeddings.safetensors", qualifiers, dimension
         )
         statement_ref = _convert_parquet_tensor(
             links_path, "statement_id", "int64", work / "statement-qualifier-statements.safetensors"
@@ -263,10 +288,10 @@ def encode_semantic_features(
         )
         store = SemanticFeatureStore(
             provider=settings.provider,
-            model=settings.model,
+            model=encoding_model(settings),
             revision=settings.revision,
             encoder_key=encoder_key(settings),
-            dimension=encoder.dimension,
+            dimension=dimension,
             relations=relation_count,
             qualifier_count=qualifiers,
             predicate_text_path="predicate-text.parquet",

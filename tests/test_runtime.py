@@ -113,7 +113,7 @@ def test_encode_text_retains_pin_for_same_model_and_clears_it_for_a_different_mo
     monkeypatch.setattr("ced.cli.load_runtime", lambda: config)
     monkeypatch.setattr(
         "ced.cli.import_module",
-        lambda name: SimpleNamespace(encode_dataset_text=lambda runtime, dataset: None),
+        lambda name: SimpleNamespace(encode_dataset_text=lambda runtime, dataset, **kwargs: None),
     )
     encode_text("dataset", model=config.text_encoding.model)
     assert config.text_encoding.revision == "pinned"

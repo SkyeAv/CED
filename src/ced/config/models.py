@@ -45,8 +45,50 @@ class SplitSettings(ConfigBase):
         return self
 
 
+class TextModelSettings(ConfigBase):
+    model: str
+    revision: str = Field(pattern=r"^[0-9a-f]{40}$")
+    dimension: int = Field(gt=0)
+
+
+class EnsembleTextEncodingSettings(ConfigBase):
+    sapbert: TextModelSettings = Field(
+        default_factory=lambda: TextModelSettings(
+            model="RenaissanceComputing/SapBERT-PubMedBERT-BabelSynonyms-v2025-01-23",
+            revision="a3dfc167497278cd3190e556c4eb717b1cbe293c",
+            dimension=768,
+        )
+    )
+    gemma: TextModelSettings = Field(
+        default_factory=lambda: TextModelSettings(
+            model="google/embeddinggemma-2",
+            revision="f9972ac22e696a105c482202646979e33e4b5a1e",
+            dimension=768,
+        )
+    )
+    qwen: TextModelSettings = Field(
+        default_factory=lambda: TextModelSettings(
+            model="Qwen/Qwen3-Embedding-0.6B",
+            revision="97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+            dimension=1024,
+        )
+    )
+    gpu: str = "L4"
+    batch_size: int = Field(default=256, gt=0)
+    max_length: int = Field(default=128, gt=0)
+    local_files_only: bool = False
+
+    @property
+    def dimension(self) -> int:
+        return self.sapbert.dimension + self.gemma.dimension + self.qwen.dimension
+
+    @property
+    def model_name(self) -> str:
+        return "+".join(f"{spec.model}@{spec.revision}" for spec in (self.sapbert, self.gemma, self.qwen))
+
+
 class TextEncodingSettings(ConfigBase):
-    provider: Literal["none", "random", "sentence_transformers"] = "none"
+    provider: Literal["none", "random", "sentence_transformers", "modal_ensemble"] = "none"
     model: str = "Qwen/Qwen3-Embedding-0.6B"
     revision: str | None = None
     dimension: int = Field(default=1024, gt=0)
@@ -56,6 +98,7 @@ class TextEncodingSettings(ConfigBase):
     local_files_only: bool = True
     device: Literal["auto", "cpu", "cuda"] = "auto"
     cache_subdirectory: Path = Path("text-embeddings")
+    ensemble: EnsembleTextEncodingSettings = Field(default_factory=EnsembleTextEncodingSettings)
 
 
 class BatchSettings(ConfigBase):

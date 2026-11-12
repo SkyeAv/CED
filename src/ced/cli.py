@@ -145,8 +145,10 @@ def encode_text(
     model: str | None = None,
     revision: str | None = None,
     dimension: int | None = None,
+    gpu: str | None = None,
+    yes: bool = False,
 ) -> None:
-    """Encode prepared text, predicates, and qualifiers with the configured backend."""
+    """Encode node names, qualifiers, and long attributes with the configured backend."""
     arguments = [
         "encode-text",
         dataset,
@@ -154,13 +156,15 @@ def encode_text(
         *(["--model", model] if model else []),
         *(["--revision", revision] if revision else []),
         *(["--dimension", str(dimension)] if dimension else []),
+        *(["--gpu", gpu] if gpu else []),
+        *(["--yes"] if yes else []),
     ]
 
     def action() -> None:
         from ced.config.models import TextEncodingSettings
 
         runtime = load_runtime()
-        updates: dict[str, object] = {
+        updates: dict[str, Any] = {
             name: value
             for name, value in (
                 ("provider", provider),
@@ -172,9 +176,16 @@ def encode_text(
         }
         if model is not None and model != runtime.text_encoding.model and revision is None:
             updates["revision"] = None
-        if updates:
-            runtime.text_encoding = TextEncodingSettings.model_validate(runtime.text_encoding.model_dump() | updates)
-        import_module("ced.model.encoding").encode_dataset_text(runtime, dataset)
+        document: dict[str, Any] = runtime.text_encoding.model_dump() | updates
+        if gpu:
+            document["ensemble"] = document["ensemble"] | {"gpu": gpu}
+        if document["provider"] == "modal_ensemble" and (model is not None or dimension is not None):
+            raise ValueError(
+                "modal_ensemble dimensions and model revisions are configured under text_encoding.ensemble"
+            )
+        if updates or gpu:
+            runtime.text_encoding = TextEncodingSettings.model_validate(document)
+        import_module("ced.model.encoding").encode_dataset_text(runtime, dataset, assume_yes=yes)
 
     _remote_or_run(arguments, action)
 

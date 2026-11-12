@@ -49,3 +49,20 @@ text_encoding:
   local_files_only: true
   device: auto
   cache_subdirectory: text-embeddings
+  ensemble:
+    gpu: ${CED_TEXT_GPU:-L4}
+    batch_size: 256
+    max_length: 128
+    local_files_only: false
+    sapbert:
+      model: RenaissanceComputing/SapBERT-PubMedBERT-BabelSynonyms-v2025-01-23
+      revision: a3dfc167497278cd3190e556c4eb717b1cbe293c
+      dimension: 768
+    gemma:
+      model: google/embeddinggemma-2
+      revision: f9972ac22e696a105c482202646979e33e4b5a1e
+      dimension: 768
+    qwen:
+      model: Qwen/Qwen3-Embedding-0.6B
+      revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
+      dimension: 1024

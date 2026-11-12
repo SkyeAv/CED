@@ -23,6 +23,8 @@ SHARED_EVALUATION_FILES = (
     "entities.parquet",
     "relations.parquet",
     "types.parquet",
+    "fitted_fields.parquet",
+    "fitted_categories.parquet",
 )
 
 
@@ -114,6 +116,8 @@ def dataset_transfer_plan(root: Path, runtime: RuntimeConfig, mode: str) -> Tran
     else:
         for item in _tensor_paths(manifest.get("tensors", {})):
             shared_names.add(item)
+        for item in _tensor_paths(manifest.get("features", {})):
+            shared_names.add(item)
     for item in _tensor_paths(manifest.get("semantic", {})):
         shared_names.add(item)
     for name in shared_names:
@@ -183,6 +187,22 @@ def execute_plan(
     metrics: dict[str, Any] = {"mode": plan.mode, "groups": 0}
     cursor = int(json.loads(progress_path.read_text()).get("cursor", 0)) if progress_path.is_file() else 0
     try:
+        if plan.mode == "encode":
+            remote = "outputs/encode"
+            result = _retry(
+                runtime,
+                lambda: runner.call(
+                    "encode_text",
+                    {
+                        "root": "/scratch/text-encoding",
+                        "output_prefix": f"/data/{remote}",
+                        **(payload_overrides or {}),
+                    },
+                ),
+            )
+            download_outputs(volume, runtime, remote, run_root, result.pop("files"))
+            metrics.update(result)
+            return metrics
         if plan.mode == "evaluate":
             remote = "outputs/evaluate"
             result = _retry(
