@@ -22,6 +22,7 @@ def write_reports(root: Path, *, threads: int, memory: str) -> None:
         connection.execute(f"SET threads={threads}")
         connection.execute("SET memory_limit=?", [memory])
         connection.execute("SET temp_directory=?", [str(root / "spill")])
+        connection.execute("SET preserve_insertion_order=false")
         for name in ("nodes", "statements", "node_identities", "ontology_terms"):
             connection.read_parquet(str(root / name / "*.parquet")).create_view(name)
         mappings = connection.execute(

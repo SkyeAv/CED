@@ -57,6 +57,14 @@ def divide_memory(value: str, parts: int) -> str:
     return f"{max(MIN_WORKER_MEMORY_MB, memory_bytes(value) // parts // 1000**2)}MB"
 
 
+def duckdb_memory(value: str) -> str:
+    """Reserve 25% of a process memory ceiling for allocations outside DuckDB's buffer manager."""
+    budget_mb = memory_bytes(value) // 1000**2
+    if budget_mb <= 0:
+        raise ValueError(f"memory limit must be positive, got {value!r}")
+    return f"{max(1, budget_mb * 3 // 4)}MB"
+
+
 @dataclass(frozen=True)
 class CanonicalizationJob:
     located: SourceArtifacts
@@ -200,12 +208,13 @@ def build_graph(
         ],
         workers=workers,
     )
-    counts = merge_graph(staging, threads=runtime.cpu_workers, memory=runtime.memory_limit)
+    merge_memory = duckdb_memory(runtime.memory_limit)
+    counts = merge_graph(staging, threads=runtime.cpu_workers, memory=merge_memory)
     manifest = SnapshotManifest(snapshot_hash=snapshot_hash, sources=lineages, counts=counts, parameters=parameters)
     atomic_write_json(staging / "manifest.json", manifest.model_dump(mode="json"))
     atomic_write_json(staging / "license-report.json", [item.model_dump(mode="json") for item in lineages])
     atomic_write_json(staging / "build-report.json", {"counts": counts})
-    write_reports(staging, threads=runtime.cpu_workers, memory=runtime.memory_limit)
+    write_reports(staging, threads=runtime.cpu_workers, memory=merge_memory)
     shutil.rmtree(staging / "spill", ignore_errors=True)
     checksums = {
         str(path.relative_to(staging)): sha256_file(path) for path in sorted(staging.rglob("*")) if path.is_file()

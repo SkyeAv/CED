@@ -97,8 +97,36 @@ def test_memory_limits_are_parsed_and_divided() -> None:
     assert divide_memory("16GB", 1) == "16000MB"
     assert divide_memory("16GB", 4) == "4000MB"
     assert divide_memory("100MB", 4) == "256MB"
+    assert pipeline.duckdb_memory("16GB") == "12000MB"
+    assert pipeline.duckdb_memory("16GiB") == "12884MB"
+    assert pipeline.duckdb_memory("128MB") == "96MB"
+    with pytest.raises(ValueError, match="positive"):
+        pipeline.duckdb_memory("0GB")
     with pytest.raises(ValueError, match="positive"):
         divide_memory("16GB", 0)
+
+
+def test_build_reserves_memory_for_process_overhead(
+    tmp_path: Path, runtime: RuntimeConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DuckDB can allocate outside its buffer manager, so the total process budget needs headroom."""
+    located = {name: write_source(tmp_path / "downloads", name, records) for name, records in SOURCES.items()}
+    observed: list[tuple[str, str]] = []
+    real_merge = pipeline.merge_graph
+    real_reports = pipeline.write_reports
+
+    def record_merge(*args: Any, **kwargs: Any) -> dict[str, int]:
+        observed.append(("merge", kwargs["memory"]))
+        return real_merge(*args, **kwargs)
+
+    def record_reports(*args: Any, **kwargs: Any) -> None:
+        observed.append(("reports", kwargs["memory"]))
+        real_reports(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "merge_graph", record_merge)
+    monkeypatch.setattr(pipeline, "write_reports", record_reports)
+    build(monkeypatch, runtime, located, ["alpha"], workers=1)
+    assert observed == [("merge", "12000MB"), ("reports", "12000MB")]
 
 
 def test_only_the_duckdb_adapter_gets_a_worker_budget(tmp_path: Path) -> None:

@@ -83,6 +83,7 @@ def merge_graph(root: Path, *, threads: int = 4, memory: str = "4GB") -> dict[st
         connection.execute(f"SET threads={threads}")
         connection.execute("SET memory_limit=?", [memory])
         connection.execute("SET temp_directory=?", [str(temporary)])
+        connection.execute("SET preserve_insertion_order=false")
         counts = {"nodes": merge_nodes(root, connection)}
         for name in ("statements", "attributes", "node_identities", "predicates", "ontology_terms", "conflicts"):
             connection.read_parquet(raw_files(root, name)).create_view(f"raw_{name}")
