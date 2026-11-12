@@ -13,7 +13,7 @@ CED builds an extensible biomedical knowledge graph from declarative sources and
 
 ## Setup
 
-Copy `.env.example` to `.env` and adjust machine-specific values. Do not commit or print credentials.
+Copy `.envrc.example` to `.envrc`, adjust machine-specific values, and run `direnv allow`. direnv exports these variables into every shell in the checkout; remote commands also run under `direnv exec`, so run `direnv allow` once in the wenceslaus checkout (and again whenever its `.envrc` changes). Do not commit or print credentials.
 
 ```sh
 export PATH=/home/sgoetz/.local/bin:$PATH
@@ -21,7 +21,7 @@ ced sync
 ced check
 ```
 
-`ced sync` rsyncs the local checkout to `CED_REMOTE_PROJECT` and installs the frozen uv environment. It excludes `.git`, `.venv`, `.ced`, `.env`, `.tablassert`, `plans`, and caches. Run `uv run prek install` in each wenceslaus Git checkout after hook changes to install or refresh both hook stages.
+`ced sync` rsyncs the local checkout to `CED_REMOTE_PROJECT` and installs the frozen uv environment. It excludes `.git`, `.venv`, `.ced`, `.envrc`, `.tablassert`, `plans`, and caches, so each machine keeps its own untracked `.envrc`. Run `uv run prek install` in each wenceslaus Git checkout after hook changes to install or refresh both hook stages.
 
 Important environment variables:
 
@@ -36,7 +36,7 @@ Important environment variables:
 | `CED_DOWNLOAD_CONNECTIONS` | Connections per file for `aria2`, and the segment cap for `http`; `1`-`32` |
 | `CED_MEMORY_LIMIT` | Process memory budget for canonicalization, merge, and reports |
 | `CED_DISK_RESERVE_GB` | Minimum free disk before downloads/builds |
-| `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` | Modal credentials, only in the untracked remote environment |
+| `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` | Modal credentials, only in the untracked wenceslaus `.envrc` or environment |
 
 ## Commands
 

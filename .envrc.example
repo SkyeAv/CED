@@ -1,0 +1,17 @@
+# direnv machine configuration: copy to .envrc, adjust values, and run `direnv allow`.
+# Never commit .envrc, print credentials, or synchronize it between machines.
+export CED_REMOTE_HOST=wenceslaus
+export CED_REMOTE_PROJECT=/local_raid1/sgoetz/Code/ISB/CED
+export CED_ARTIFACT_ROOT=.ced
+export CED_FULLMAP=/home/sgoetz/Desktop/fullmap
+export CED_CPU_WORKERS=4
+export CED_MEMORY_LIMIT=16GB
+export CED_DISK_RESERVE_GB=32
+# Connections per file: aria2 -x and the segmented http backend's maximum segment count.
+export CED_DOWNLOAD_CONNECTIONS=8
+# Sources fetched concurrently by `ced fetch` (1-4).
+export CED_DOWNLOAD_JOBS=4
+export PYTHONUTF8=1
+# Set Modal credentials only in the untracked wenceslaus .envrc or environment.
+#export MODAL_TOKEN_ID=
+#export MODAL_TOKEN_SECRET=

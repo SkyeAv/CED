@@ -66,7 +66,7 @@ Do not run those remote debugging commands locally. Do not let a local commit ho
 - Use small typed modules and functions, Pydantic tagged unions for configuration, protocols for backends/adapters/feature providers, and one canonical representation per concept. Avoid duplicate per-source pipelines, parallel schemas, speculative wrappers, and repeated conversion code.
 - Keep source-specific URLs, artifacts, field mappings, licenses, and predicate semantics in `src/ced/config/sources/*.yaml`. Adding a compatible dataset must not edit Python. Keep genuinely new formats inside a narrow adapter.
 - Preserve the three scoped Tablassert monkeypatches behind exact version guards and restoration. Do not patch across other modules when the public API or a small pre/post-processing step suffices.
-- Use environment variables or untracked machine config for host-specific paths and credentials. Never commit `.env`, print secrets, or synchronize credentials. Keep checked-in code free of machine-specific constants; documented defaults live in `.env.example`.
+- Use environment variables or untracked machine config for host-specific paths and credentials. Configure them with direnv in the untracked `.envrc` (template: `.envrc.example`); never commit `.envrc`, print secrets, or synchronize credentials. Keep checked-in code free of machine-specific constants.
 - Preserve arbitrary predicates and attributes without fabricating ontology mappings. Only unresolved CED values receive deterministic, explicitly marked `CED:` local IDs. Do not merge identities through names, synonyms, or cross-references.
 - Use conventional commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `chore:`). Keep scientific table content unchanged during infrastructure work.
 
