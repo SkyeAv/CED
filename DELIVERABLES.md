@@ -22,7 +22,7 @@ Keep the current canonical graph, including `applied_to_treat`, concrete `treats
 
 Required before paper runs:
 
-- Connect real categorical, numeric, and semantic text features to training. `src/ced/model/training.py` currently constructs a `RandomProjectionProvider`; random features remain a test/control provider, not the paper's semantic model.
+- Verify that paper runs consume real categorical, numeric, and semantic text features. `src/ced/model/training.py` now selects `SemanticFeatureProvider` when semantic artifacts are present and otherwise falls back to `RandomProjectionProvider`; verify feature coverage and forbid the random-only fallback in paper runs. Random features remain a test/control provider, not the paper's semantic model.
 - Export the encoder hidden state as `z_node [N,D]`, before the ComplEx projection, with exact entity IDs. The current model constructs `D=32`; read the dimension from the checkpoint rather than assuming 64.
 - Audit family phenotype proportions currently annotated as `effect_type: odds_ratio`. Expose verified values as `affected_fraction`, not odds ratios or treatment effects.
 - Preserve reported positive fractions, observed zero, and missing separately. Observed-zero `has_phenotype` rows must not become positive phenotype-presence supervision merely because a statement exists.
