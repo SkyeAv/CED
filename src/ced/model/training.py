@@ -32,7 +32,6 @@ class FeatureProvider(Protocol):
     def reconstruction_loss(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor | None: ...
 
 
-
 class PublicationFeatureProvider(RandomProjectionProvider):
     """Add learned publication and evidence projections to random relation features."""
 
