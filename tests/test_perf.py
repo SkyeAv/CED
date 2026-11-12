@@ -9,6 +9,8 @@ Run: pytest -m perf -q   (excluded from the default suite).
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -242,7 +244,7 @@ def test_perf_train_step(tmp_path: Path) -> None:
 
 def test_perf_evaluation_helpers() -> None:
     torch = pytest.importorskip("torch")
-    from ced.model.evaluation import _full_messages
+    from ced.model.evaluation import _build_positives, _full_messages
 
     graph = synthetic_graph(nodes=5000, edges=20000, relations=8, type_sets=4, seed=5)
     edge_index = torch.from_numpy(graph["edge_index"])
@@ -251,16 +253,39 @@ def test_perf_evaluation_helpers() -> None:
     types = torch.from_numpy(graph["type_set_id"])
     workload = {"nodes": 5000, "edges": 20000, "relations": 8}
 
-    def build_positives() -> dict:
-        positives: dict[tuple[int, int], set[int]] = {}
-        for head, relation, tail in zip(
-            edge_index[0].tolist(), relations.tolist(), edge_index[1].tolist(), strict=True
-        ):
-            positives.setdefault((head, relation), set()).add(tail)
-            positives.setdefault((tail, relation), set()).add(head)
-        return positives
-
     messages_seconds = timed(lambda: _full_messages(edge_index, relations, splits, types), iterations=3)
-    positives_seconds = timed(build_positives, iterations=3)
+    positives_seconds = timed(lambda: _build_positives(edge_index, relations), iterations=3)
     write_record("evaluation_full_messages", seconds=messages_seconds, iterations=3, workload=workload)
     write_record("evaluation_positives", seconds=positives_seconds, iterations=3, workload=workload)
+
+
+def test_perf_evaluation_relation_scoring(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
+    torch = pytest.importorskip("torch")
+    from ced.model.evaluation import _score_relation_batch
+    from ced.model.training import build_model
+
+    root = tmp_path / "dataset"
+    synthetic_dataset(root, batches=1)
+    document = json.loads((root / "manifest.json").read_text())
+    model = build_model(document, root, edge_type_count=2, seed=5)
+    nodes, targets = 5000, 32
+    state = torch.randn(nodes, 32, generator=torch.Generator().manual_seed(7))
+    heads = [index % nodes for index in range(targets)]
+    tails = [(index * 17 + 1) % nodes for index in range(targets)]
+    relation_ids = torch.full((nodes,), 0, dtype=torch.long)
+
+    def reference_scores() -> None:
+        with torch.no_grad():
+            for head, tail in zip(heads, tails, strict=True):
+                model.decoder.score(state[head].expand_as(state), relation_ids, state)
+                model.decoder.score(state, relation_ids, state[tail].expand_as(state))
+
+    def batched_scores() -> None:
+        with torch.no_grad():
+            _score_relation_batch(model, state, heads, tails, 0)
+
+    workload = {"nodes": nodes, "targets": targets, "relations_per_batch": 1, "dimension": 32}
+    reference_seconds = timed(reference_scores, iterations=3)
+    batched_seconds = timed(batched_scores, iterations=3)
+    write_record("evaluation_scoring_reference", seconds=reference_seconds, iterations=3, workload=workload)
+    write_record("evaluation_scoring_batched", seconds=batched_seconds, iterations=3, workload=workload)

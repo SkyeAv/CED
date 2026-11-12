@@ -10,9 +10,59 @@ import torch  # pyright: ignore[reportMissingImports]
 
 from ced.model.negatives import TypedPools, typed_pools
 from ced.model.schemas import TensorRef
-from ced.model.training import Device, build_model, resolve_device
+from ced.model.training import Device, RelationalAutoencoder, build_model, resolve_device
 
 Ranking = Literal["exact", "sampled"]
+_TARGET_BATCH_SIZE = 32
+
+
+def _first_occurrence_ids(rows: torch.Tensor) -> tuple[torch.Tensor, int]:
+    """Label each row with the id that first-occurrence order would assign.
+
+    Reproduces ``keys.setdefault(tuple(row), len(keys))`` over ``rows`` with no
+    Python loop and no per-row host sync: ``unique`` sorts the distinct rows, a
+    segment-min recovers each unique row's first position, and an ``argsort`` of
+    those positions renumbers the uniques by appearance. The returned ids are
+    therefore bitwise identical to the historical insertion order.
+    """
+    unique_rows, inverse = torch.unique(rows, return_inverse=True, dim=0)
+    count = int(unique_rows.shape[0])
+    if count == 0:
+        return torch.empty(rows.shape[0], dtype=torch.long, device=rows.device), 0
+    inverse = inverse.reshape(-1)
+    positions = torch.arange(rows.shape[0], device=rows.device)
+    first_position = torch.full((count,), rows.shape[0], dtype=torch.long, device=rows.device)
+    first_position.scatter_reduce_(0, inverse, positions, reduce="amin", include_self=True)
+    appearance = torch.argsort(first_position)
+    renumbered = torch.empty(count, dtype=torch.long, device=rows.device)
+    renumbered[appearance] = torch.arange(count, device=rows.device)
+    return renumbered[inverse], count
+
+
+def _group_pairs(pairs: np.ndarray, values: np.ndarray) -> dict[tuple[int, int], set[int]]:
+    """Group values by two-column keys with vectorized sorting, not row loops."""
+    if not values.size:
+        return {}
+    order = np.lexsort((values, pairs[:, 1], pairs[:, 0]))
+    sorted_pairs = pairs[order]
+    sorted_values = values[order]
+    starts = np.concatenate(
+        (np.array([0], dtype=np.int64), np.flatnonzero(np.any(sorted_pairs[1:] != sorted_pairs[:-1], axis=1)) + 1)
+    )
+    ends = np.append(starts[1:], values.size)
+    return {
+        (int(sorted_pairs[start, 0]), int(sorted_pairs[start, 1])): set(sorted_values[start:end].tolist())
+        for start, end in zip(starts.tolist(), ends.tolist(), strict=True)
+    }
+
+
+def _build_positives(edge_index: torch.Tensor, relations: torch.Tensor) -> dict[tuple[int, int], set[int]]:
+    """Build the bidirectional (node, relation) positive index in bulk."""
+    heads = edge_index[0].detach().cpu().numpy()
+    tails = edge_index[1].detach().cpu().numpy()
+    relation_values = relations.detach().cpu().numpy()
+    pairs = np.concatenate((np.column_stack((heads, relation_values)), np.column_stack((tails, relation_values))))
+    return _group_pairs(pairs, np.concatenate((tails, heads)))
 
 
 def _full_messages(
@@ -21,20 +71,26 @@ def _full_messages(
     train = torch.nonzero(splits == 0).flatten()
     if not train.numel():
         raise ValueError("evaluation requires at least one training statement for topology")
-    keys: dict[tuple[int, int, int], int] = {}
-    forward = torch.zeros(train.numel(), dtype=torch.long)
-    reverse = torch.zeros(train.numel(), dtype=torch.long)
-    for position, index in enumerate(train.tolist()):
-        head, relation, tail = int(edge_index[0, index]), int(relations[index]), int(edge_index[1, index])
-        forward[position] = keys.setdefault((int(types[head]), relation, int(types[tail])), len(keys))
-        reverse[position] = keys.setdefault(
-            (int(types[tail]), relation + int(relations.max()) + 1, int(types[head])), len(keys)
-        )
+    max_relation = int(relations.max())
+    heads = edge_index[0, train]
+    tails = edge_index[1, train]
+    train_relations = relations[train]
+    type_head = types[heads]
+    type_tail = types[tails]
+    # Interleave forward then reverse triples per train position so one labeling
+    # pass reproduces the historical order: the forward key is inserted before
+    # the reverse key for the same statement.
+    forward_triples = torch.stack((type_head, train_relations, type_tail), dim=1)
+    reverse_triples = torch.stack((type_tail, train_relations + max_relation + 1, type_head), dim=1)
+    sequence = torch.stack((forward_triples, reverse_triples), dim=1).reshape(-1, 3)
+    labels, key_count = _first_occurrence_ids(sequence)
+    forward = labels[0::2]
+    reverse = labels[1::2]
     return (
         torch.cat((edge_index[:, train], edge_index[[1, 0]][:, train]), dim=1),
-        torch.cat((relations[train], relations[train] + int(relations.max()) + 1)),
+        torch.cat((train_relations, train_relations + max_relation + 1)),
         torch.cat((forward, reverse)),
-        len(keys),
+        key_count,
     )
 
 
@@ -47,14 +103,14 @@ def filtered_rank(scores: torch.Tensor, target: int, filtered: set[int]) -> int:
     return int((scores[mask] > scores[target]).sum().item()) + 1
 
 
-def sampled_rank(
-    scores: torch.Tensor,
+def _sampled_selection(
     target: int,
     filtered: set[int],
     candidates: np.ndarray | None,
     rng: np.random.Generator,
     count: int,
-) -> int:
+) -> np.ndarray:
+    """Select ranked candidates without changing the historical RNG stream."""
     pool = np.array([], dtype=np.int64) if candidates is None else candidates
     if pool.size > count:
         pool = rng.choice(pool, size=count, replace=False)
@@ -64,8 +120,57 @@ def sampled_rank(
         chosen = chosen[~np.isin(chosen, excluded)]
     if target not in chosen:
         chosen = np.append(chosen, target)
+    return chosen
+
+
+def _selection_rank(scores: torch.Tensor, target: int, chosen: np.ndarray) -> int:
     selected = torch.as_tensor(chosen, dtype=torch.long, device=scores.device)
     return int((scores[selected] > scores[target]).sum().item()) + 1
+
+
+def sampled_rank(
+    scores: torch.Tensor,
+    target: int,
+    filtered: set[int],
+    candidates: np.ndarray | None,
+    rng: np.random.Generator,
+    count: int,
+) -> int:
+    chosen = _sampled_selection(target, filtered, candidates, rng, count)
+    return _selection_rank(scores, target, chosen)
+
+
+def _score_relation_batch(
+    model: RelationalAutoencoder,
+    state: torch.Tensor,
+    heads: list[int],
+    tails: list[int],
+    relation: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Score same-relation targets together with bounded batched decoder calls."""
+    head_ids = torch.tensor(heads, dtype=torch.long, device=state.device)
+    tail_ids = torch.tensor(tails, dtype=torch.long, device=state.device)
+    relation_ids = torch.full((len(heads),), relation, dtype=torch.long, device=state.device)
+    node_real, node_imaginary = model.decoder.complex_states(state)
+    head_real, head_imaginary = model.decoder.complex_states(state[head_ids])
+    tail_real, tail_imaginary = model.decoder.complex_states(state[tail_ids])
+    relation_real, relation_imaginary = model.decoder.relations(relation_ids).chunk(2, dim=-1)
+    # Project each distinct target and the graph once, instead of projecting an
+    # expanded (targets x entities) matrix. Broadcasting only repeats the same
+    # elementwise ComplEx products and reduction order as decoder.score().
+    tail_scores = (
+        head_real.unsqueeze(1) * relation_real.unsqueeze(1)
+        - head_imaginary.unsqueeze(1) * relation_imaginary.unsqueeze(1)
+    ).mul(node_real).sum(-1) + (
+        head_real.unsqueeze(1) * relation_imaginary.unsqueeze(1)
+        + head_imaginary.unsqueeze(1) * relation_real.unsqueeze(1)
+    ).mul(node_imaginary).sum(-1)
+    head_scores = (node_real * relation_real.unsqueeze(1) - node_imaginary * relation_imaginary.unsqueeze(1)).mul(
+        tail_real.unsqueeze(1)
+    ).sum(-1) + (node_real * relation_imaginary.unsqueeze(1) + node_imaginary * relation_real.unsqueeze(1)).mul(
+        tail_imaginary.unsqueeze(1)
+    ).sum(-1)
+    return tail_scores, head_scores
 
 
 def evaluate_dataset(
@@ -127,10 +232,7 @@ def evaluate_dataset(
                 message_relations, torch.arange(message_relations.numel(), device=resolved)
             ),
         )
-    positives: dict[tuple[int, int], set[int]] = {}
-    for head, relation, tail in zip(edge_index[0].tolist(), relations.tolist(), edge_index[1].tolist(), strict=True):
-        positives.setdefault((head, relation), set()).add(tail)
-        positives.setdefault((tail, relation), set()).add(head)
+    positives = _build_positives(edge_index, relations)
     split_id = 1 if split == "validation" else 2
     targets = torch.nonzero(splits == split_id).flatten()
     if not targets.numel():
@@ -140,41 +242,69 @@ def evaluate_dataset(
     ranks: list[int] = []
     groups: dict[str, list[int]] = {}
     random = np.random.default_rng(seed)
-    with torch.no_grad():
-        for target in targets.tolist():
-            head, relation, tail = int(edge_index[0, target]), int(relations[target]), int(edge_index[1, target])
-            relation_tensor = torch.full((state.shape[0],), relation, dtype=torch.long, device=resolved)
-            tail_scores = model.decoder.score(state[head].expand_as(state), relation_tensor, state)
-            head_scores = model.decoder.score(state, relation_tensor, state[tail].expand_as(state))
-            if ranking == "sampled":
-                assert pools is not None
-                tail_rank = sampled_rank(
-                    tail_scores,
+    # Bulk host fetches preserve target order; sampled candidates are selected
+    # in that same order before relation grouping, so the RNG stream is unchanged.
+    head_list = edge_index[0, targets].tolist()
+    relation_list = relations[targets].tolist()
+    tail_list = edge_index[1, targets].tolist()
+    target_rows = list(zip(head_list, relation_list, tail_list, strict=True))
+    selections: list[tuple[np.ndarray, np.ndarray]] | None = None
+    if ranking == "sampled":
+        assert pools is not None
+        selections = [
+            (
+                _sampled_selection(
                     tail,
                     positives.get((head, relation), set()),
                     pools.objects.get(relation),
                     random,
                     sampled_candidates,
-                )
-                head_rank = sampled_rank(
-                    head_scores,
+                ),
+                _sampled_selection(
                     head,
                     positives.get((tail, relation), set()),
                     pools.subjects.get(relation),
                     random,
                     sampled_candidates,
+                ),
+            )
+            for head, relation, tail in target_rows
+        ]
+    relation_positions: dict[int, list[int]] = {}
+    for position, relation in enumerate(relation_list):
+        relation_positions.setdefault(relation, []).append(position)
+    rank_pairs: list[tuple[int, int] | None] = [None] * len(target_rows)
+    with torch.no_grad():
+        for relation, positions in relation_positions.items():
+            for start in range(0, len(positions), _TARGET_BATCH_SIZE):
+                batch_positions = positions[start : start + _TARGET_BATCH_SIZE]
+                tail_scores, head_scores = _score_relation_batch(
+                    model,
+                    state,
+                    [head_list[position] for position in batch_positions],
+                    [tail_list[position] for position in batch_positions],
+                    relation,
                 )
-            else:
-                tail_rank = filtered_rank(tail_scores, tail, positives.get((head, relation), set()))
-                head_rank = filtered_rank(head_scores, head, positives.get((tail, relation), set()))
-            for rank, predicate_id, endpoint in zip(
-                (tail_rank, head_rank), (relation, relation), (tail, head), strict=True
-            ):
-                ranks.append(rank)
-                groups.setdefault(f"predicate:{predicates[predicate_id]}", []).append(rank)
-                identifier = entities[endpoint]
-                if identifier.startswith(family_prefix):
-                    groups.setdefault("ced_family", []).append(rank)
+                for row, position in enumerate(batch_positions):
+                    head, _, tail = target_rows[position]
+                    if selections is None:
+                        tail_rank = filtered_rank(tail_scores[row], tail, positives.get((head, relation), set()))
+                        head_rank = filtered_rank(head_scores[row], head, positives.get((tail, relation), set()))
+                    else:
+                        tail_selection, head_selection = selections[position]
+                        tail_rank = _selection_rank(tail_scores[row], tail, tail_selection)
+                        head_rank = _selection_rank(head_scores[row], head, head_selection)
+                    rank_pairs[position] = (tail_rank, head_rank)
+    # Restore statement order before aggregating so floating-point reduction
+    # order, group insertion order, and the final report match the reference.
+    for (head, relation, tail), rank_pair in zip(target_rows, rank_pairs, strict=True):
+        assert rank_pair is not None
+        for rank, endpoint in zip(rank_pair, (tail, head), strict=True):
+            ranks.append(rank)
+            groups.setdefault(f"predicate:{predicates[relation]}", []).append(rank)
+            identifier = entities[endpoint]
+            if identifier.startswith(family_prefix):
+                groups.setdefault("ced_family", []).append(rank)
     tensor_ranks = torch.tensor(ranks, dtype=torch.float64)
     report: dict[str, object] = {
         "split": split,
