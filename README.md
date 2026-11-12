@@ -54,7 +54,7 @@ ced train <dataset-id> --resume <run-id> --yes
 ced evaluate <run-id> --split test --ranking exact --yes
 ```
 
-`ced check` runs the full remote gate: `uv lock --check`, Ruff, Pyright, pytest, and strict YAML lint. The gate runs pytest with four xdist workers and one thread per worker, excluding `network`, `gpu`, `fullmap`, and `perf` tests by default; use `uv run pytest -n 0` remotely for serial debugging. The prek pre-push hook runs this gate on wenceslaus. On the laptop, run `ced check` first and use `git push --no-verify` so no check executes locally.
+`ced check` runs the full remote gate: `uv lock --check`, Ruff, Pyright, pytest, and strict YAML lint. The gate runs pytest with four xdist workers and one thread per worker, excludes `network`, `gpu`, `fullmap`, and `perf` tests by default, and fails below 90% coverage of `src/ced` (`pytest-cov`, configured in `pyproject.toml`); use `uv run pytest -n 0` remotely for serial debugging. The prek pre-push hook runs this gate on wenceslaus. On the laptop, run `ced check` first and use `git push --no-verify` so no check executes locally.
 
 ## Acquisition and concurrency
 

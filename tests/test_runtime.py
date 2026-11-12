@@ -91,7 +91,9 @@ def test_quality_gate_uses_pyright_and_bounded_xdist(tmp_path: Path, monkeypatch
     commands = [command for command, _ in calls]
     assert ["uv", "run", "--no-sync", "pyright"] in commands
     pytest_command = next(command for command in commands if "pytest" in command)
-    assert pytest_command[-2:] == ["-n", "2"]
+    assert pytest_command[:6] == ["uv", "run", "--no-sync", "pytest", "-n", "2"]
+    assert "--cov=ced" in pytest_command
+    assert "--cov-report=term-missing" in pytest_command
     pytest_environment = next(env for command, env in calls if "pytest" in command)
     ruff_environment = next(env for command, env in calls if "ruff" in command)
     assert ruff_environment["RAYON_NUM_THREADS"] == "2"

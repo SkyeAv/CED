@@ -195,6 +195,28 @@ def test_write_tensor_rejects_unsupported_dtype(tmp_path: Path) -> None:
         write_tensor(tmp_path / "bad.safetensors", np.array([1.0, 2.0], dtype=np.float64))
 
 
+def test_read_tensor_rejects_missing_files_columns_and_dtype_drift(tmp_path: Path) -> None:
+    """read_tensor is the last line of defense before indices reach training; a missing
+    file, a renamed column and a dtype that drifted from the manifest must all raise."""
+    from ced.model.tensors import read_tensor, tensor_dtype, write_tensor
+
+    with pytest.raises(ValueError, match="unsupported tensor dtype"):
+        tensor_dtype("float64")
+    with pytest.raises(FileNotFoundError, match="tensor is missing"):
+        read_tensor(tmp_path / "absent.parquet", column="value", dtype="int64", shape=[1])
+
+    path = tmp_path / "tensors.safetensors"
+    write_tensor(path, np.array([1, 2, 3], dtype=np.int64), column="head")
+    loaded = read_tensor(path, column="head", dtype="int64", shape=[3])
+    assert loaded.tolist() == [1, 2, 3]
+
+    write_tensor(path, np.array([1, 2], dtype=np.int64), column="tail")
+    with pytest.raises(ValueError, match="column is missing"):
+        read_tensor(path, column="head", dtype="int64", shape=[2])
+    with pytest.raises(ValueError, match="dtype mismatch"):
+        read_tensor(path, column="tail", dtype="float32", shape=[2])
+
+
 def test_neighbor_sampler_excludes_heldout_and_schema() -> None:
     from ced.model.batches import sample_neighborhood
 
