@@ -402,16 +402,15 @@ def test_encode_dataset_text_resolves_every_record(tmp_path: Path, monkeypatch: 
     )
 
     store = encode_dataset_text(runtime, dataset.name)
-    assert store.rows == 1
+    assert store.rows == 9
     assert store.dimension == 8
-    index = pq.read_table(Path(store.index_path))
-    assert index.num_rows == 1
-    assert index.column("row").to_pylist() == [0]
-    assert index.column("role").to_pylist() == ["statement"]
-    assert len(store.parts) == 2
+    index = pq.read_table(dataset / store.index_path)
+    assert index.num_rows == 9
+    assert len(set(index.column("row").to_pylist())) == 6
+    assert index.column("role").to_pylist().count("node_class") == 4
+    assert len(store.parts) == 1
     assert all(reference.path.endswith(".safetensors") for reference in store.parts)
-    assert store.parts[0].load(tmp_path).shape == (1, 8)
-    assert store.parts[1].load(tmp_path).shape == (6, 8)
+    assert store.parts[0].load(dataset).shape == (12, 8)
     document = json.loads((dataset / "manifest.json").read_text())
     semantic = document["semantic"]
     assert semantic["model"] == _runtime.text_encoding.model
@@ -424,14 +423,14 @@ def test_encode_dataset_text_resolves_every_record(tmp_path: Path, monkeypatch: 
     assert any("CED:held_out_qualifier" in text for text in qualifier_text)
     assert TensorRef.model_validate(semantic["statement_qualifiers"]["indptr"]).load(dataset).shape == (7,)
     parts_before = [reference.path for reference in store.parts]
-    digest_before = sha256_file(Path(store.index_path))
+    digest_before = sha256_file(dataset / store.index_path)
     semantic_digest_before = sha256_file(dataset / "qualifier-embeddings.safetensors")
 
     # A second run encodes nothing new: no extra parts and a byte-identical index.
     again = encode_dataset_text(runtime, dataset.name)
     assert again.rows == store.rows
     assert [reference.path for reference in again.parts] == parts_before
-    assert sha256_file(Path(again.index_path)) == digest_before
+    assert sha256_file(dataset / again.index_path) == digest_before
     assert sha256_file(dataset / "qualifier-embeddings.safetensors") == semantic_digest_before
     assert not (dataset / "text-records.partial.parquet").exists()
     assert not (dataset / "text-missing.partial.parquet").exists()
@@ -460,3 +459,98 @@ def test_prepared_vocabulary_loads_training_metadata(tmp_path: Path, monkeypatch
         expected[field["idx"]] = max(expected.get(field["idx"], 0), category["value_id"] + 1)
     assert counts == expected
     assert numeric == sorted(field["idx"] for field in fields if field["kind"] == "numeric")
+
+
+def test_semantic_encoding_features_and_transfer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(NODES, "id", ["CED:N0", "X:N1", "X:N2", "X:N3"])
+    monkeypatch.setitem(NODES, "names", [["zero"], ["one"], ["two"], ["three"]])
+    monkeypatch.setitem(STATEMENTS, "subject", ["CED:N0", "CED:N0", "X:N1", "X:N2", "X:N3", "X:N1"])
+    monkeypatch.setitem(STATEMENTS, "object", ["X:N1", "X:N2", "X:N2", "X:N3", "CED:N0", "X:N3"])
+    monkeypatch.setitem(ATTRIBUTES, "owner_id", ["CED:N0", "X:N1", "s0"])
+    monkeypatch.setitem(
+        STATEMENTS,
+        "qualifiers_json",
+        ['{"AMALGAM:population_context_qualifier":"CED:Family_1"}', "{}", "{}", "{}", "{}", "{}"],
+    )
+    _, dataset, runtime = prepare(tmp_path, monkeypatch)
+    monkeypatch.setattr("ced.model.encoding.require_cpu_worker", lambda config: None)
+    runtime = runtime.model_copy(
+        update={
+            "text_encoding": runtime.text_encoding.model_copy(
+                update={"provider": "random", "dimension": 8, "batch_size": 2}
+            )
+        }
+    )
+    store = encode_dataset_text(runtime, dataset.name)
+    index = pq.read_table(dataset / store.index.path)
+    roles = index["role"].to_pylist()
+    assert roles.count("node_name") == 4
+    assert roles.count("node_class") == 4
+    assert roles.count("qualifier") == 1
+    assert roles.count("statement") == 1
+    qualifier = next(row for row in index.to_pylist() if row["role"] == "qualifier")
+    assert qualifier["text"] == "AMALGAM:population_context_qualifier: CED:Family_1"
+
+    artifact = (dataset / store.index.path).parent
+    prefixes = pq.read_table(artifact / "prefix-vocabulary.parquet")["value"].to_pylist()
+    categories = pq.read_table(artifact / "category-vocabulary.parquet")["value"].to_pylist()
+    assert prefixes == ["CED", "X"]
+    assert categories == ["biolink:Disease", "biolink:Gene"]
+    assert store.node.prefix_id.load(dataset).shape == (4,)
+    assert store.node.category_indptr.load(dataset).shape == (5,)
+
+    from ced.model.dense_features import SemanticFeatureProvider
+    from ced.model.training import build_model
+
+    document = json.loads((dataset / "manifest.json").read_text())
+    model = build_model(document, dataset, edge_type_count=4, seed=3)
+    monkeypatch.setattr("ced.model.dense_features._OWNER_CHUNK", 2)
+    provider = model.features
+    assert isinstance(provider, SemanticFeatureProvider)
+    nodes = torch.arange(4, dtype=torch.long)
+    embedded = provider.node_features(nodes)
+    statements = torch.arange(6, dtype=torch.long)
+    statement_features = provider.statement_features(torch.zeros(6, dtype=torch.long), statements)
+    assert embedded.shape == (4, 32)
+    assert statement_features.shape == (6, 16)
+    assert torch.isfinite(embedded).all()
+    assert torch.isfinite(statement_features).all()
+    class_text = provider._mean_text(nodes, 1)
+    assert torch.equal(class_text[0], class_text[1])
+    assert torch.equal(class_text[2], class_text[3])
+    assert not torch.equal(class_text[0], class_text[2])
+    loss = (
+        embedded.square().mean()
+        + statement_features.square().mean()
+        + provider.reconstruction_loss(torch.zeros(6, dtype=torch.long), statements)
+    )
+    loss.backward()
+    from ced.model.semantic import SemanticFeatureProvider as StatementSemanticFeatureProvider
+
+    statement_provider = provider.fallback
+    assert isinstance(statement_provider, StatementSemanticFeatureProvider)
+    for parameter in (
+        provider.node_head.text_projection.weight,
+        provider.node_head.class_text_projection.weight,
+        provider.node_head.prefix_embedding.weight,
+        provider.node_head.category_embedding.weight,
+        provider.node_head.degree_projection.weight,
+        provider.qualifier_projection.weight,
+        statement_provider.predicate_head.encoder.weight,
+        statement_provider.qualifier_head.encoder.weight,
+    ):
+        assert parameter.grad is not None
+        assert torch.isfinite(parameter.grad).all()
+
+    tensors = {name: TensorRef.model_validate(value).load(dataset) for name, value in document["tensors"].items()}
+    train = tensors["split"] == 0
+    expected_degree = np.bincount(np.concatenate((tensors["head"][train], tensors["tail"][train])), minlength=4)
+    np.testing.assert_array_equal(provider._degrees(torch.device("cpu")).numpy(), expected_degree)
+
+    from ced.modal_plan import dataset_transfer_plan
+
+    for mode in ("train", "evaluate"):
+        shared = dataset_transfer_plan(dataset, runtime, mode).shared
+        assert store.index.path in shared
+        assert store.node.prefix_id.path in shared
+        assert all(part.path in shared for part in store.parts)

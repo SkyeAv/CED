@@ -141,6 +141,8 @@ def test_transfer_plan_rejects_oversized_shared_payload(tmp_path: Path) -> None:
     (root / "entities.parquet").write_bytes(b"x" * 8)
     (root / "relations.parquet").write_bytes(b"x" * 8)
     (root / "types.parquet").write_bytes(b"x" * 8)
+    (root / "fitted_fields.parquet").write_bytes(b"x" * 8)
+    (root / "fitted_categories.parquet").write_bytes(b"x" * 8)
     (root / "manifest.json").write_text(json.dumps({"checksums": {}}))
     config = runtime(tmp_path, max_shared_bytes=8)
     with pytest.raises(ValueError, match="shared transfer size"):
@@ -203,6 +205,47 @@ def test_retry_does_not_swallow_persistent_failures(tmp_path: Path) -> None:
     assert attempts == 3
 
 
+def test_modal_encoding_transfers_only_missing_text_and_encoded_parts(tmp_path: Path) -> None:
+    missing = tmp_path / "missing.parquet"
+    missing.write_bytes(b"texts")
+    plan = TransferPlan(mode="encode", root=tmp_path, shared={"missing.parquet": missing}, shared_bytes=5)
+    volume = FakeVolume()
+
+    class EncodingRunner:
+        def __init__(self) -> None:
+            self.payload: dict[str, Any] = {}
+
+        def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]:
+            assert function == "encode_text"
+            self.payload = payload
+            assert volume.files["dataset/missing.parquet"] == b"texts"
+            volume.files["outputs/encode/vectors/part-000000.parquet"] = b"vectors"
+            volume.files["outputs/encode/index/part-000000.parquet"] = b"index"
+            return {
+                "groups": 0,
+                "rows": 1,
+                "files": ["vectors/part-000000.parquet", "index/part-000000.parquet"],
+            }
+
+    runner = EncodingRunner()
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    metrics = execute_plan(
+        plan,
+        runtime(tmp_path),
+        volume,
+        runner,
+        run_root,
+        payload_overrides={"ensemble": {"gpu": "L4"}, "start_row": 4, "start_part": 2},
+    )
+    assert metrics["rows"] == 1
+    assert runner.payload["start_row"] == 4
+    assert runner.payload["start_part"] == 2
+    assert (run_root / "vectors" / "part-000000.parquet").read_bytes() == b"vectors"
+    assert (run_root / "index" / "part-000000.parquet").read_bytes() == b"index"
+    assert not any(key.startswith("outputs") for key in volume.files)
+
+
 def test_paid_modal_confirmation_requires_explicit_approval(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     pytest.importorskip("modal")
     from ced.modal_app import confirm_paid
@@ -211,5 +254,7 @@ def test_paid_modal_confirmation_requires_explicit_approval(tmp_path: Path, caps
     plan = TransferPlan(mode="train", root=tmp_path, shared={}, groups=[])
     confirm_paid(plan, config, assume_yes=True)
     assert "Approved by --yes" in capsys.readouterr().out
+    confirm_paid(plan, config, assume_yes=True, gpu="L4")
+    assert "using L4" in capsys.readouterr().out
     with pytest.raises(RuntimeError, match="interactive terminal"):
         confirm_paid(plan, config, assume_yes=False)

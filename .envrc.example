@@ -13,6 +13,8 @@ export CED_ISOLATED_TREE_MAX_NODES=2
 export CED_DOWNLOAD_CONNECTIONS=8
 # Sources fetched concurrently by `ced fetch` (1-4).
 export CED_DOWNLOAD_JOBS=4
+# Text inference is independent of training's L40S GPU.
+export CED_TEXT_GPU=L4
 export PYTHONUTF8=1
 # Set Modal credentials only in the untracked wenceslaus .envrc or environment.
 #export MODAL_TOKEN_ID=

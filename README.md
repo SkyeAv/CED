@@ -34,6 +34,7 @@ Important environment variables:
 | `CED_CPU_WORKERS` | Hard CPU worker cap; must remain `4` |
 | `CED_ISOLATED_TREE_MAX_NODES` | Maximum disconnected tree component size to prune during preparation; `0` disables; default `2` |
 | `CED_DOWNLOAD_JOBS` | Artifacts downloaded concurrently by `ced fetch`; `1`-`4` |
+| `CED_TEXT_GPU` | Modal text inference GPU; default `L4` |
 | `CED_DOWNLOAD_CONNECTIONS` | Connections per file for `aria2`, and the segment cap for `http`; `1`-`32` |
 | `CED_MEMORY_LIMIT` | Process memory budget for canonicalization, merge, and reports |
 | `CED_DISK_RESERVE_GB` | Minimum free disk before downloads/builds |
@@ -148,6 +149,20 @@ Encoding covers ordinary long node/statement text, every predicate, and every di
 `src/ced/model/semantic.py` compresses frozen predicate and qualifier vectors through separate trainable autoencoder heads. Their bottleneck codes and a learned direction embedding form the encoder's statement features. Reconstruction loss uses only predicates and qualifiers on selected training statements, and `semantic_weight` controls its contribution during `train_batches`. Frozen vectors and sparse indices are non-persistent buffers, so checkpoints contain the learned heads without duplicating the Qwen artifact. Datasets without a `semantic` manifest entry retain the original random feature provider.
 
 Tensor artifacts use dataset schema 2. After upgrading, run `ced prepare` and then `ced encode-text` again; Parquet-backed datasets and embedding caches are not migrated or deleted automatically.
+
+### Modal ensemble and semantic nodes
+
+`ced encode-text <dataset-id> --provider modal_ensemble --yes` runs one encoding call on `CED_TEXT_GPU` (`L4` by default), independent of training's `L40S`. Models load once with BF16, SDPA, and length-grouped dynamic padding. Each block is L2-normalized before concatenation:
+
+- `RenaissanceComputing/SapBERT-PubMedBERT-BabelSynonyms-v2025-01-23`: CLS, 768 dimensions.
+- `google/embeddinggemma-2`: text-only documents, 768 dimensions.
+- `Qwen/Qwen3-Embedding-0.6B`: documents without a query prompt, 1024 dimensions.
+
+The 2560-dimensional vectors cover names, class labels, predicates, qualifiers, and long attributes. All missing unique texts share one Modal call and the append-only cache. Returned immutable safetensors parts and Parquet indices are validated before publication. Dataset manifests include all referenced artifacts for training and evaluation.
+
+Six node tokens - name text, BERT class text, learned CURIE prefix, learned category, topology, and training-edge-only `log1p` degree - pass through attention and a residual 32-dimensional bottleneck autoencoder. Identical class labels share cached vectors. The node head composes with the predicate/qualifier autoencoder above, preserving learned direction features and statement reconstruction loss. Heads process at most 4096 owners per chunk.
+
+Prepared schema-2 topology remains reusable; run `ced encode-text` again to create dense schema-1 semantic node artifacts. Legacy sidecar-only dense artifacts require re-encoding.
 
 ## Development
 

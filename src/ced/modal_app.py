@@ -5,7 +5,8 @@ import shutil
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
+from uuid import uuid4
 
 import modal
 
@@ -20,6 +21,12 @@ from ced.modal_plan import (
     prepare_run_directory,
 )
 from ced.preflight import require_cpu_worker
+
+
+class TextCache(Protocol):
+    def manifest(self) -> dict[str, Any]: ...
+
+    def adopt_parts(self, encoded: Path, missing: Path) -> int: ...
 
 
 def human_size(size: int) -> str:
@@ -66,8 +73,8 @@ class ModalFunctionRunner(FunctionRunner):
         return self.functions[function].remote(payload, self.volume)
 
 
-def build_image(runtime: RuntimeConfig) -> Any:
-    return (
+def build_image(runtime: RuntimeConfig, *, text: bool = False) -> Any:
+    image = (
         modal.Image.from_registry(runtime.modal.base_image, add_python=runtime.modal.python_version)
         .pip_install("uv")
         .pip_install("torch>=2.6", index_url=runtime.modal.torch_index_url)
@@ -77,9 +84,16 @@ def build_image(runtime: RuntimeConfig) -> Any:
         .pip_install_from_pyproject("pyproject.toml")
         .env({"PYTHONPATH": "/ced/src", "PYTHONUTF8": "1"})
     )
+    if text:
+        image = image.pip_install("sentence-transformers>=6.1,<7", "transformers>=5.18,<6").env(
+            {"HF_HOME": "/hf", "HF_HUB_ENABLE_HF_TRANSFER": "1", "TOKENIZERS_PARALLELISM": "false"}
+        )
+    return image
 
 
-def create_app(runtime: RuntimeConfig, volume: Any, run_name: str) -> tuple[Any, dict[str, Any]]:
+def create_app(
+    runtime: RuntimeConfig, volume: Any, run_name: str, *, include_encoding: bool = False
+) -> tuple[Any, dict[str, Any]]:
     app = modal.App(run_name)
     common = {
         "image": build_image(runtime),
@@ -150,12 +164,44 @@ def create_app(runtime: RuntimeConfig, volume: Any, run_name: str) -> tuple[Any,
         volume.commit()
         return report
 
-    return app, {"train_group": train_group, "evaluate": evaluate}
+    functions = {"train_group": train_group, "evaluate": evaluate}
+    if include_encoding:
+        model_volume = modal.Volume.from_name("ced-text-models-v1", create_if_missing=True)
+        encoding_common = common | {
+            "image": build_image(runtime, text=True),
+            "gpu": runtime.text_encoding.ensemble.gpu,
+            "volumes": {"/data": volume, "/hf": model_volume},
+        }
+
+        @app.function(**encoding_common)
+        def encode_text(payload: dict[str, Any], volume: Any) -> dict[str, Any]:
+            from ced.config.models import EnsembleTextEncodingSettings
+            from ced.model.encoding import encode_missing_to_parts
+            from ced.model.text_models import create_ensemble_encoder
+
+            root = _prepare(payload)
+            settings = EnsembleTextEncodingSettings.model_validate(payload["ensemble"])
+            encoder = create_ensemble_encoder(settings, device="cuda")
+            model_volume.commit()
+            staged = root / "encoded"
+            report = encode_missing_to_parts(
+                root / "missing.parquet",
+                staged,
+                encoder,
+                start_row=payload["start_row"],
+                start_part=payload["start_part"],
+            )
+            shutil.copytree(staged, Path(payload["output_prefix"]), dirs_exist_ok=True)
+            volume.commit()
+            return report
+
+        functions["encode_text"] = encode_text
+    return app, functions
 
 
-def confirm_paid(plan: TransferPlan, runtime: RuntimeConfig, *, assume_yes: bool) -> None:
+def confirm_paid(plan: TransferPlan, runtime: RuntimeConfig, *, assume_yes: bool, gpu: str | None = None) -> None:
     message = (
-        f"Start a paid Modal GPU {plan.mode} job using {runtime.modal.gpu}, "
+        f"Start a paid Modal GPU {plan.mode} job using {gpu or runtime.modal.gpu}, "
         f"{len(plan.groups)} batch group(s), and {human_size(plan.total_bytes)} of ephemeral transfer storage?"
     )
     if assume_yes:
@@ -165,6 +211,43 @@ def confirm_paid(plan: TransferPlan, runtime: RuntimeConfig, *, assume_yes: bool
         raise RuntimeError("paid Modal jobs require an interactive terminal or explicit --yes")
     if input(f"{message}\nType RUN to continue: ").strip() != "RUN":
         raise RuntimeError("Modal job was not approved")
+
+
+def encode_text_remote(runtime: RuntimeConfig, missing: Path, cache: TextCache, *, assume_yes: bool = False) -> None:
+    require_cpu_worker(runtime)
+    settings = runtime.text_encoding.ensemble
+    size = missing.stat().st_size
+    if size > runtime.modal.max_shared_bytes:
+        raise ValueError(f"missing-text input is {size} bytes, exceeding the Modal shared transfer bound")
+    plan = TransferPlan(
+        mode="encode", root=missing.parent, shared={"missing.parquet": missing}, groups=[], shared_bytes=size
+    )
+    confirm_paid(plan, runtime, assume_yes=assume_yes, gpu=settings.gpu)
+    manifest = cache.manifest()
+    run_root = missing.parent / "text-modal.partial"
+    if run_root.exists():
+        shutil.rmtree(run_root)
+    run_root.mkdir()
+    try:
+        with modal.Volume.ephemeral(version=2) as volume:
+            app, functions = create_app(runtime, volume, f"ced-encode-{uuid4().hex[:12]}", include_encoding=True)
+            adapter = ModalVolumeAdapter(volume)
+            with app.run():
+                execute_plan(
+                    plan,
+                    runtime,
+                    adapter,
+                    ModalFunctionRunner(functions, volume),
+                    run_root,
+                    payload_overrides={
+                        "ensemble": settings.model_dump(mode="json"),
+                        "start_row": manifest["rows"],
+                        "start_part": len(manifest["parts"]),
+                    },
+                )
+        cache.adopt_parts(run_root, missing)
+    finally:
+        shutil.rmtree(run_root, ignore_errors=True)
 
 
 def train_remote(

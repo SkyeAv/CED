@@ -285,6 +285,7 @@ model = [
 ]
 text = [
     { name = "sentence-transformers" },
+    { name = "transformers" },
 ]
 
 [package.dev-dependencies]
@@ -312,10 +313,11 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.12,<3" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "safetensors", specifier = ">=0.8" },
-    { name = "sentence-transformers", marker = "extra == 'text'", specifier = ">=3.0" },
+    { name = "sentence-transformers", marker = "extra == 'text'", specifier = ">=6.1,<7" },
     { name = "tablassert", specifier = "==22.3.0" },
     { name = "torch", specifier = ">=2.6", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch-geometric", marker = "extra == 'model'", specifier = ">=2.7" },
+    { name = "transformers", marker = "extra == 'text'", specifier = ">=5.18,<6" },
     { name = "zstandard", specifier = ">=0.23" },
 ]
 provides-extras = ["model", "text"]

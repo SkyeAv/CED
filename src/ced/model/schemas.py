@@ -11,10 +11,14 @@ from ced.kg.audit import validate_checksums
 from ced.model.tensors import DEFAULT_COLUMN, read_tensor
 
 
-class VocabularyArtifact(ConfigBase):
+class FileArtifact(ConfigBase):
     path: str
     rows: int = Field(ge=0)
     sha256: str
+
+
+class VocabularyArtifact(FileArtifact):
+    pass
 
 
 class EntityVocabulary(ConfigBase):
@@ -72,6 +76,10 @@ class TensorRef(ConfigBase):
         return read_tensor(root / self.path, column=self.column, dtype=self.dtype, shape=self.shape)
 
 
+class DensePartRef(TensorRef):
+    row_start: int = Field(ge=0)
+
+
 class TextRecord(ConfigBase):
     owner_id: int
     field_id: int
@@ -91,15 +99,29 @@ class DenseFeatureRef(ConfigBase):
     tensor: TensorRef
 
 
+class NodeSemanticArtifacts(ConfigBase):
+    prefix_id: TensorRef
+    category_id: TensorRef
+    category_indptr: TensorRef
+    prefix_vocabulary_size: int = Field(ge=1)
+    category_vocabulary_size: int = Field(ge=1)
+
+
 class DenseFeatureStore(ConfigBase):
+    schema_version: Literal[1] = 1
     provider: str
     model: str
     encoder_key: str
     dimension: int = Field(gt=0)
     rows: int = Field(ge=0)
-    index_path: str
-    parts: list[TensorRef] = Field(default_factory=list)
+    index: FileArtifact
+    node: NodeSemanticArtifacts
+    parts: list[DensePartRef] = Field(default_factory=list)
     checksums: dict[str, str] = Field(default_factory=dict)
+
+    @property
+    def index_path(self) -> str:
+        return self.index.path
 
 
 class CategoricalCsr(ConfigBase):
@@ -167,6 +189,7 @@ class FeatureStoreArtifact(ConfigBase):
     categorical: CategoricalCsr | None = None
     numeric: NumericCoo | None = None
     text: list[TextRecord] = Field(default_factory=list)
+    dense: DenseFeatureStore | None = None
 
 
 class IsolationTreePruningReport(ConfigBase):
