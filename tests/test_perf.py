@@ -105,6 +105,41 @@ def test_perf_prepare_topology(tmp_path: Path) -> None:
         connection.close()
 
 
+def test_perf_prepare_topology_memmap(tmp_path: Path) -> None:
+    import duckdb
+
+    from ced.config.models import SplitSettings
+    from ced.model.prepare import _write_topology
+
+    statements = 20000
+    connection = duckdb.connect()
+    try:
+        topology_tables(connection, entities=500, predicates=20, statements=statements, seed=13)
+        arrays = {
+            "edge_index": np.lib.format.open_memmap(
+                tmp_path / "edge_index.npy", mode="w+", dtype=np.int64, shape=(2, statements)
+            ),
+            "relation_id": np.lib.format.open_memmap(
+                tmp_path / "relation_id.npy", mode="w+", dtype=np.int64, shape=(statements,)
+            ),
+            "split": np.lib.format.open_memmap(tmp_path / "split.npy", mode="w+", dtype=np.int8, shape=(statements,)),
+        }
+        settings = SplitSettings()
+        records = tmp_path / "split-records.ndjson"
+        seconds = timed(
+            lambda: _write_topology(connection, arrays, records, settings, statements),
+            iterations=3,
+        )
+        write_record(
+            "prepare_topology_memmap",
+            seconds=seconds,
+            iterations=3,
+            workload={"statements": statements, "backing": "memmap"},
+        )
+    finally:
+        connection.close()
+
+
 def test_perf_write_ordered(tmp_path: Path) -> None:
     import duckdb
 
