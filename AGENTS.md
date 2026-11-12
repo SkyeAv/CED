@@ -34,6 +34,7 @@ uv run --no-sync ced build --source ced --fullmap-path /home/sgoetz/Desktop/full
 uv run --no-sync ced build --group translator
 uv run --no-sync ced prepare <snapshot-id>
 uv run --no-sync ced encode-text <dataset-id> --provider random
+uv run --no-sync ced encode-publications <dataset-id> --download --yes
 uv run --no-sync ced train <dataset-id> --epochs 1 --seed 20261110 --yes
 uv run --no-sync ced train <dataset-id> --resume <run-id> --yes
 uv run --no-sync ced evaluate <run-id> --split test --ranking exact --yes

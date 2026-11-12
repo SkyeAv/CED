@@ -8,7 +8,7 @@ CED builds an extensible biomedical knowledge graph from declarative sources and
 - `wenceslaus` runs all hermetic tests, lint/type checks, fetches, builds, canonicalization, tensor preparation, and CPU evaluation with at most four workers.
 - Modal runs GPU training and inference only. It never downloads sources, builds the graph, prepares tensors, or performs CPU preprocessing.
 - Routine verification uses synthetic fixtures and mocks. Large downloads, full builds, dataset preparation, Modal smoke jobs, and paid GPU runs require explicit approval.
-- `ced fetch` is the only command permitted to download payloads. Builds must not implicitly download.
+- `ced fetch` is the only source acquisition command. Publication embeddings may be downloaded only by an explicit `ced encode-publications --download --yes`; cached artifacts are the default and builds never download implicitly.
 - Never download fullmap. Use the existing read-only database through `CED_FULLMAP` or `--fullmap-path`.
 
 ## Setup
@@ -51,6 +51,7 @@ ced build --source ced --source amalgam --fullmap-path /home/sgoetz/Desktop/full
 ced build --group translator
 ced prepare <snapshot-id>
 ced encode-text <dataset-id> --provider random
+ced encode-publications <dataset-id> --download --yes
 ced train <dataset-id> --epochs 1 --seed 20261110 --yes
 ced train <dataset-id> --resume <run-id> --yes
 ced evaluate <run-id> --split test --ranking exact --yes
@@ -163,6 +164,14 @@ The 2560-dimensional vectors cover names, class labels, predicates, qualifiers, 
 Six node tokens - name text, BERT class text, learned CURIE prefix, learned category, topology, and training-edge-only `log1p` degree - pass through attention and a residual 32-dimensional bottleneck autoencoder. Identical class labels share cached vectors. The node head composes with the predicate/qualifier autoencoder above, preserving learned direction features and statement reconstruction loss. Heads process at most 4096 owners per chunk.
 
 Prepared schema-2 topology remains reusable; run `ced encode-text` again to create dense schema-1 semantic node artifacts. Legacy sidecar-only dense artifacts require re-encoding.
+
+## Publication encoding
+
+`ced encode-publications` attaches precomputed document embeddings to prepared statements without changing graph topology or splits. The default artifact is the pinned private `glusman-team/medcpt-ae` Parquet at revision `3c923644c682a9664f1409ce07ae4e78b622bcf5`: 128-dimensional, L2-normalized vectors for `PMID`, `PMC`, and `NCT` identifiers. The command uses the local Hugging Face cache by default. `--download --yes` explicitly permits the 20,449,885,518-byte download on wenceslaus and verifies the pinned size and SHA-256 before use.
+
+For each statement, CED mean-pools resolved publication vectors and computes `log1p` of the distinct cited-publication count as evidence strength. Missing IDs and unsupported sources, including DailyMed, contribute a zero vector while retaining their citation in evidence strength. A bias-free learned projection adds these features to the existing relation vector, so statements with no publication evidence retain the original statement-feature path. Publication tensors are non-persistent model buffers: they move to the training device but are not duplicated into checkpoints. Modal transfers them as shared dataset artifacts for training and evaluation.
+
+Publication features change the training configuration hash. Prepare and encode the dataset before starting a new run; checkpoints created before publication encoding are not resumed into the new model contract.
 
 ## Development
 

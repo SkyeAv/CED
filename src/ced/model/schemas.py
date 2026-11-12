@@ -233,6 +233,31 @@ class SemanticFeatureStore(ConfigBase):
         return self
 
 
+class PublicationFeatureStore(ConfigBase):
+    repo_id: str
+    revision: str = Field(pattern=r"^[0-9a-f]{40}$")
+    source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    dimension: int = Field(gt=0)
+    statements: int = Field(ge=0)
+    statement_publications: int = Field(ge=0)
+    matched_publications: int = Field(ge=0)
+    statements_with_publications: int = Field(ge=0)
+    statements_with_embeddings: int = Field(ge=0)
+    feature_key: str
+    vectors: TensorRef
+    evidence: TensorRef
+
+    @model_validator(mode="after")
+    def aligned_tensors(self) -> PublicationFeatureStore:
+        if self.vectors.shape != [self.statements, self.dimension] or self.evidence.shape != [self.statements]:
+            raise ValueError("publication feature tensors are not aligned with statements")
+        if self.matched_publications > self.statement_publications:
+            raise ValueError("matched publication references exceed all publication references")
+        if not self.statements_with_embeddings <= self.statements_with_publications <= self.statements:
+            raise ValueError("publication statement counts are inconsistent")
+        return self
+
+
 class DatasetManifest(ConfigBase):
     schema_version: int = 2
     dataset_id: str
@@ -247,6 +272,7 @@ class DatasetManifest(ConfigBase):
     feature_fields: list[FeatureFieldSpec] = Field(default_factory=list)
     features: FeatureStoreArtifact = Field(default_factory=FeatureStoreArtifact)
     semantic: SemanticFeatureStore | None = None
+    publications: PublicationFeatureStore | None = None
     batches: list[TrainingExample] = Field(default_factory=list)
     vocabularies: dict[str, VocabularyArtifact] = Field(default_factory=dict)
     checksums: dict[str, str] = Field(default_factory=dict)

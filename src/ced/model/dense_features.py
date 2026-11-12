@@ -44,8 +44,9 @@ class RandomProjectionProvider(nn.Module):
         del statement_id
         return self.statement_vectors[relation_id.clamp(0, self.statement_vectors.shape[0] - 1)]
 
-    def reconstruction_loss(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> None:
+    def reconstruction_loss(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor | None:
         del relation_id, statement_id
+        return None
 
 
 def _ranges(starts: torch.Tensor, ends: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:

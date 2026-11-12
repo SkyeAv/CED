@@ -191,6 +191,19 @@ def encode_text(
 
 
 @app.command
+def encode_publications(dataset: str, download: bool = False, yes: bool = False) -> None:
+    """Attach pinned precomputed publication embeddings and evidence strength on wenceslaus."""
+    arguments = ["encode-publications", dataset, *(["--download"] if download else []), *(["--yes"] if yes else [])]
+
+    def action() -> None:
+        import_module("ced.model.publications").encode_dataset_publications(
+            load_runtime(), dataset, download=download, assume_yes=yes
+        )
+
+    _remote_or_run(arguments, action)
+
+
+@app.command
 def train(dataset: str, epochs: int = 1, seed: int = 20261110, resume: str | None = None, yes: bool = False) -> None:
     """Run approved GPU training on Modal from prepared wenceslaus shards."""
     arguments = [

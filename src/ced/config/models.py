@@ -101,6 +101,19 @@ class TextEncodingSettings(ConfigBase):
     ensemble: EnsembleTextEncodingSettings = Field(default_factory=EnsembleTextEncodingSettings)
 
 
+class PublicationEmbeddingSettings(ConfigBase):
+    repo_id: str = "glusman-team/medcpt-ae"
+    revision: str = Field(default="3c923644c682a9664f1409ce07ae4e78b622bcf5", pattern=r"^[0-9a-f]{40}$")
+    filename: str = "medcpt-embeddings-128.parquet"
+    source_sha256: str = Field(
+        default="ef11c7dbb164c7d0ddb86458f3926a3dc4580e26dc139d32dfc32763af0456e8", pattern=r"^[0-9a-f]{64}$"
+    )
+    size: int = Field(default=20_449_885_518, gt=0)
+    dimension: int = Field(default=128, gt=0)
+    batch_size: int = Field(default=65_536, gt=0)
+    fast_transfer: bool = True
+
+
 class BatchSettings(ConfigBase):
     node_limit: int = Field(default=4096, gt=0)
     neighbor_fanout: list[int] = Field(default=[16, 8])
@@ -131,6 +144,7 @@ class RuntimeConfig(ConfigBase):
     batch: BatchSettings = Field(default_factory=BatchSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
     text_encoding: TextEncodingSettings = Field(default_factory=TextEncodingSettings)
+    publication_embeddings: PublicationEmbeddingSettings = Field(default_factory=PublicationEmbeddingSettings)
 
     @model_validator(mode="before")
     @classmethod
