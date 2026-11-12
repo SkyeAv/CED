@@ -14,7 +14,16 @@ from ced.acquisition.archive import extract_archive
 from ced.acquisition.aria2 import Aria2Backend
 from ced.acquisition.base import FetchedArtifact
 from ced.acquisition.huggingface import HuggingFaceBackend
-from ced.acquisition.pipeline import PreparedSource, fetch_sources, materialize_source, parallel_map
+from ced.acquisition.local import LocalBackend
+from ced.acquisition.pipeline import (
+    PreparedSource,
+    fetch_sources,
+    locate_source,
+    materialize_source,
+    parallel_map,
+    prepare_source,
+    resolve_source,
+)
 from ced.config.models import RuntimeConfig
 from ced.config.sources import (
     ArchiveSpec,
@@ -214,6 +223,118 @@ def test_archive_names_roles_whose_patterns_match_nothing(tmp_path: Path) -> Non
         extract_archive(archive, spec, tmp_path / "missing")
     assert "archive roles have no members: nodes" in str(failure.value)
     assert (tmp_path / "missing").exists() is False
+
+
+def test_local_backend_fetches_verified_files(tmp_path: Path) -> None:
+    """Local acquisition must apply the same checksum verification as network backends:
+    a mutated cached file is just as dangerous as a corrupted download."""
+    root = tmp_path / "mirror"
+    root.mkdir()
+    payload_path = root / "nodes.ndjson"
+    payload_path.write_bytes(PAYLOAD)
+    selected = source(LocalAcquisition(backend="local", root=root))
+    config = runtime(tmp_path)
+    artifact = LocalBackend(config, selected).fetch(selected.artifacts[0], allow_download=False)
+    assert artifact.path == payload_path
+    assert artifact.sha256 == DIGEST
+    assert artifact.size == len(PAYLOAD)
+    assert artifact.origin == str(payload_path)
+
+    with pytest.raises(FileNotFoundError, match="local artifact is missing"):
+        LocalBackend(config, selected).fetch(
+            ArtifactSpec(path="absent.ndjson", role="nodes", sha256=DIGEST), allow_download=False
+        )
+    with pytest.raises(TypeError, match="requires local acquisition"):
+        LocalBackend(config, source(Aria2Acquisition(backend="aria2")))
+
+
+def test_artifact_helpers_verify_copy_and_cache(tmp_path: Path) -> None:
+    """verify_artifact, cached_or_verify and copy_atomic are the shared integrity floor for
+    every backend; size, digest and mutation must each fail loudly and atomically."""
+    from ced.acquisition.base import cached_or_verify, copy_atomic, verify_artifact
+
+    payload_path = tmp_path / "payload.ndjson"
+    payload_path.write_bytes(PAYLOAD)
+    spec = ArtifactSpec(path="payload.ndjson", role="nodes", sha256=DIGEST, size=len(PAYLOAD))
+    selected = source(LocalAcquisition(backend="local", root=tmp_path))
+
+    assert verify_artifact(payload_path, spec) == DIGEST
+    with pytest.raises(FileNotFoundError):
+        verify_artifact(tmp_path / "absent", spec)
+    with pytest.raises(ValueError, match="size mismatch"):
+        verify_artifact(payload_path, spec.model_copy(update={"size": 99}))
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        verify_artifact(payload_path, spec.model_copy(update={"sha256": "0" * 64}))
+
+    assert cached_or_verify(tmp_path / "absent", selected, spec, "fixture") is None
+    cached = cached_or_verify(payload_path, selected, spec, "fixture")
+    assert cached is not None
+    assert cached.sha256 == DIGEST
+    payload_path.write_bytes(b"mutated")
+    with pytest.raises(ValueError, match="cached artifact failed verification"):
+        cached_or_verify(payload_path, selected, spec, "fixture")
+
+    payload_path.write_bytes(PAYLOAD)
+    destination = tmp_path / "nested" / "copy.ndjson"
+    copy_atomic(payload_path, destination)
+    assert destination.read_bytes() == PAYLOAD
+
+
+def test_prepare_source_materializes_inventory(tmp_path: Path) -> None:
+    """An inventory-backed source must fetch its manifest, hash-pin the materialized
+    artifacts and carry the declared total size into the download-approval budget."""
+    root = tmp_path / "mirror"
+    root.mkdir()
+    vertices = root / "vertices" / "vertices.parquet"
+    vertices.parent.mkdir(parents=True, exist_ok=True)
+    vertices.write_bytes(PAYLOAD)
+    document = {
+        "schema_version": 1,
+        "encoding": "global-int32-uuid-binary16-zstd9",
+        "lossless": True,
+        "compact": {
+            "parquet_files": 1,
+            "total_bytes": len(PAYLOAD),
+            "sha256": {"vertices/vertices.parquet": DIGEST},
+            "row_counts": {"vertices/vertices.parquet": 1},
+        },
+    }
+    document_json = json.dumps(document).encode()
+    manifest_digest = hashlib.sha256(document_json).hexdigest()
+    (root / "manifest.json").write_bytes(document_json)
+    vertices_spec = ArtifactSpec(path="vertices/vertices.parquet", role="vertices", sha256=DIGEST)
+    manifest_spec = ArtifactSpec(path="manifest.json", role="manifest", sha256=manifest_digest)
+    selected = source(
+        LocalAcquisition(backend="local", root=root),
+        artifacts=[manifest_spec, vertices_spec],
+        inventory=ArtifactInventorySpec(
+            manifest="manifest.json", format="amalgam_compact", include=["vertices/"], roles={"vertices/": "vertices"}
+        ),
+    )
+    prepared = prepare_source(runtime(tmp_path), selected, allow_download=False)
+    assert [artifact.path for artifact in prepared.artifacts] == [
+        "manifest.json",
+        "vertices/vertices.parquet",
+        "vertices/vertices.parquet",
+    ]
+    assert prepared.inventory_bytes == len(PAYLOAD)
+    result = materialize_source(prepared, allow_download=False)
+    assert [artifact.path.name for artifact in result.files["manifest"]] == ["manifest.json"]
+    assert result.paths("vertices")[0].name == "vertices.parquet"
+
+
+def test_optional_artifacts_may_stay_absent(tmp_path: Path) -> None:
+    optional = ArtifactSpec(path="absent.ndjson", role="nodes", sha256=DIGEST, required=False)
+    selected = source(LocalAcquisition(backend="local", root=tmp_path), artifacts=[optional])
+    result = resolve_source(runtime(tmp_path), selected, allow_download=False)
+    assert result.files == {}
+    assert result.paths("nodes", extracted=False) == []
+
+
+def test_locate_source_names_the_fetch_instruction(tmp_path: Path) -> None:
+    selected = source(LocalAcquisition(backend="local", root=tmp_path))
+    with pytest.raises(FileNotFoundError, match="ced fetch --source fixture"):
+        locate_source(runtime(tmp_path), selected)
 
 
 def test_large_download_requires_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

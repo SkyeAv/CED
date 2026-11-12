@@ -67,7 +67,16 @@ def run_quality_gate(config: RuntimeConfig) -> None:
         ["uv", "run", "--no-sync", "ruff", "check", "."],
         ["uv", "run", "--no-sync", "ruff", "format", "--check", "."],
         ["uv", "run", "--no-sync", "pyright"],
-        ["uv", "run", "--no-sync", "pytest", "-n", str(config.cpu_workers)],
+        [
+            "uv",
+            "run",
+            "--no-sync",
+            "pytest",
+            "-n",
+            str(config.cpu_workers),
+            "--cov=ced",
+            "--cov-report=term-missing",
+        ],
     ]
     yaml_files = sorted(
         str(path) for root in (Path("src"), Path("tests")) if root.exists() for path in root.rglob("*.yaml")

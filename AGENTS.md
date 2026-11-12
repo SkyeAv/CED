@@ -19,7 +19,7 @@ The local `ced` process only syncs code and delegates work. `ced` is not on the 
 ```sh
 uv sync                                  # one-time per checkout
 uv run --no-sync ced sync                # sync source/config/lockfiles; never delete or expose .ced or credentials
-uv run --no-sync ced check               # remote Ruff, Pyright, four-worker pytest-xdist, uv lock, and YAML gate
+uv run --no-sync ced check               # remote Ruff, Pyright, four-worker pytest-xdist with a 90% coverage gate, uv lock, and YAML lint
 uv run --no-sync ced config validate
 uv run --no-sync ced sources list        # inspect declarative sources without downloading them
 uv run --no-sync ced fetch --source chembl
@@ -83,4 +83,4 @@ Do not run those remote debugging commands locally. Do not let a local commit ho
 
 ## Verification boundary
 
-`ced check` and all smoke tests run on wenceslaus using synthetic fixtures. The `ced check` gate uses four xdist workers with one thread per worker; use `uv run pytest -n 0` remotely for serial debugging. The `network`, `gpu`, `fullmap`, and `perf` markers are excluded from the default gate; run performance benchmarks only on wenceslaus with `uv run --no-sync pytest -m perf` (protocol in PERFORMANCE.md). Verify bounded memory, deterministic artifacts, split isolation, global typed negatives, finite gradients, checkpoint resume, and artifact checksums remotely. Do not run actual graph builds, dataset preparations, downloads, or paid Modal jobs during routine verification. Modal smoke jobs use tiny synthetic tensors and ephemeral storage, require explicit approval, and clean up in `finally`. Never download unnamed datasets or fullmap during verification.
+`ced check` and all smoke tests run on wenceslaus using synthetic fixtures. The `ced check` gate uses four xdist workers with one thread per worker and fails below 90% coverage of `src/ced`; use `uv run pytest -n 0` remotely for serial debugging. The `network`, `gpu`, `fullmap`, and `perf` markers are excluded from the default gate; run performance benchmarks only on wenceslaus with `uv run --no-sync pytest -m perf` (protocol in PERFORMANCE.md). Verify bounded memory, deterministic artifacts, split isolation, global typed negatives, finite gradients, checkpoint resume, and artifact checksums remotely. Do not run actual graph builds, dataset preparations, downloads, or paid Modal jobs during routine verification. Modal smoke jobs use tiny synthetic tensors and ephemeral storage, require explicit approval, and clean up in `finally`. Never download unnamed datasets or fullmap during verification.
