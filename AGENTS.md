@@ -14,21 +14,23 @@ CED builds an extensible multi-source KGX graph and trains a relational graph au
 
 ## Commands
 
-The local `ced` process only syncs code and delegates work:
+The local `ced` process only syncs code and delegates work. `ced` is not on the laptop PATH; invoke it through uv from a checkout with a synced environment:
 
 ```sh
-ced sync                 # sync source/config/lockfiles; never delete or expose .ced or credentials
-ced check                # remote Ruff, Pyright, four-worker pytest-xdist, uv lock, and YAML gate
-ced sources list         # inspect declarative sources without downloading them
-ced fetch --source chembl
-ced fetch --group translator
-ced build --source ced --fullmap-path /home/sgoetz/Desktop/fullmap
-ced build --group translator
-ced prepare <snapshot-id>
-ced encode-text <dataset-id> --provider random
-ced train <dataset-id> --epochs 1 --seed 20261110 --yes
-ced train <dataset-id> --resume <run-id> --yes
-ced evaluate <run-id> --split test --ranking exact --yes
+uv sync                                  # one-time per checkout
+uv run --no-sync ced sync                # sync source/config/lockfiles; never delete or expose .ced or credentials
+uv run --no-sync ced check               # remote Ruff, Pyright, four-worker pytest-xdist, uv lock, and YAML gate
+uv run --no-sync ced config validate
+uv run --no-sync ced sources list        # inspect declarative sources without downloading them
+uv run --no-sync ced fetch --source chembl
+uv run --no-sync ced fetch --group translator
+uv run --no-sync ced build --source ced --fullmap-path /home/sgoetz/Desktop/fullmap
+uv run --no-sync ced build --group translator
+uv run --no-sync ced prepare <snapshot-id>
+uv run --no-sync ced encode-text <dataset-id> --provider random
+uv run --no-sync ced train <dataset-id> --epochs 1 --seed 20261110 --yes
+uv run --no-sync ced train <dataset-id> --resume <run-id> --yes
+uv run --no-sync ced evaluate <run-id> --split test --ranking exact --yes
 ```
 
 For direct debugging, SSH to wenceslaus first and use the remote checkout:
@@ -43,7 +45,7 @@ uv lock --check
 uv run prek run --all-files
 ```
 
-Do not run those remote debugging commands locally. Do not let a local commit hook launch lint or tests; run hooks and commits that need hooks in the remote checkout after synchronization. Use `git push --no-verify` on the laptop so the pre-push hook never launches checks locally; run `ced check` first. A normal `git push` on wenceslaus runs the same full gate through prek. Run `uv run prek install` in each wenceslaus Git checkout after hook changes; `ced sync` excludes `.git` and cannot install hooks. Tests are offline and hermetic by default. Network integration, large downloads, full builds, dataset preparations, and paid GPU jobs require explicit selection and approval; do not run them as routine implementation verification.
+Do not run those remote debugging commands locally. Do not let a local commit hook launch lint or tests; run hooks and commits that need hooks in the remote checkout after synchronization. Use `git push --no-verify` on the laptop so the pre-push hook never launches checks locally; run `uv run --no-sync ced check` first. A normal `git push` on wenceslaus runs the same full gate through prek. Run `uv run prek install` in each wenceslaus Git checkout after hook changes; `ced sync` excludes `.git` and cannot install hooks. Tests are offline and hermetic by default. Network integration, large downloads, full builds, dataset preparations, and paid GPU jobs require explicit selection and approval; do not run them as routine implementation verification.
 
 ## Layout
 
@@ -68,6 +70,17 @@ Do not run those remote debugging commands locally. Do not let a local commit ho
 - Preserve arbitrary predicates and attributes without fabricating ontology mappings. Only unresolved CED values receive deterministic, explicitly marked `CED:` local IDs. Do not merge identities through names, synonyms, or cross-references.
 - Use conventional commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `chore:`). Keep scientific table content unchanged during infrastructure work.
 
+## Git / PR workflow
+
+- Squash-merge PRs into `main` with conventional-commit subjects; the squash commit carries the PR number.  (evidence: history x4)
+- Rebase a feature branch onto `main` and fix conflicts before the PR; do not merge locally.  (evidence: sessions x1)
+- No tags or releases exist; versioning is not yet in use.  (evidence: history, git tag empty)
+
+## Gotchas
+
+- A stale checkout venv fails with `ModuleNotFoundError` (e.g. `cyclopts`); rerun `uv sync` in that checkout. [verified]
+- Non-interactive SSH to wenceslaus can pick up the snap `uv` with the wrong `HOME` and fail with "cannot create user data directory"; prefix `HOME=/home/sgoetz` on remote `uv run` one-liners. [verified]
+
 ## Verification boundary
 
-`ced check` and all smoke tests run on wenceslaus using synthetic fixtures. The `ced check` gate uses four xdist workers with one thread per worker; use `uv run pytest -n 0` remotely for serial debugging. Verify bounded memory, deterministic artifacts, split isolation, global typed negatives, finite gradients, checkpoint resume, and artifact checksums remotely. Do not run actual graph builds, dataset preparations, downloads, or paid Modal jobs during routine verification. Modal smoke jobs use tiny synthetic tensors and ephemeral storage, require explicit approval, and clean up in `finally`. Never download unnamed datasets or fullmap during verification.
+`ced check` and all smoke tests run on wenceslaus using synthetic fixtures. The `ced check` gate uses four xdist workers with one thread per worker; use `uv run pytest -n 0` remotely for serial debugging. The `network`, `gpu`, `fullmap`, and `perf` markers are excluded from the default gate; run performance benchmarks only on wenceslaus with `uv run --no-sync pytest -m perf` (protocol in PERFORMANCE.md). Verify bounded memory, deterministic artifacts, split isolation, global typed negatives, finite gradients, checkpoint resume, and artifact checksums remotely. Do not run actual graph builds, dataset preparations, downloads, or paid Modal jobs during routine verification. Modal smoke jobs use tiny synthetic tensors and ephemeral storage, require explicit approval, and clean up in `finally`. Never download unnamed datasets or fullmap during verification.
