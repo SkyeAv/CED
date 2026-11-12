@@ -1,7 +1,7 @@
 """End-to-end preparation tests on a synthetic canonical snapshot.
 
-Why these exist: `prepare_dataset` had no test coverage at all before the Parquet
-rewrite. A regression in topology emission, split assignment or feature joins
+Why these exist: `prepare_dataset` had no test coverage at all before the tensor
+storage rewrite. A regression in topology emission, split assignment or feature joins
 would otherwise only surface during a multi-hour build or a paid Modal run, long
 after the offending change landed.
 """
@@ -123,12 +123,14 @@ def test_prepare_dataset_streams_topology_and_features(tmp_path: Path, monkeypat
     _, dataset, runtime = prepare(tmp_path, monkeypatch)
     manifest = json.loads((dataset / "manifest.json").read_text())
 
+    assert manifest["schema_version"] == 2
     assert set(manifest["tensors"]) == {"head", "tail", "relation_id", "split", "type_set_id"}
     for name, reference in manifest["tensors"].items():
-        assert reference["path"].endswith(".parquet"), name
+        assert reference["path"].endswith(".safetensors"), name
     assert not (dataset / "split-records.ndjson").exists()
+    assert not list(dataset.rglob("*.npy"))
     suffixes = {path.suffix for path in dataset.rglob("*") if path.is_file() and path.name != "manifest.json"}
-    assert suffixes <= {".parquet", ".json"}
+    assert suffixes <= {".parquet", ".json", ".safetensors"}
     validate_checksums(dataset, manifest["checksums"])
     for name, reference in manifest["tensors"].items():
         loaded = TensorRef.model_validate(reference).load(dataset)
@@ -172,6 +174,7 @@ def test_prepare_dataset_streams_topology_and_features(tmp_path: Path, monkeypat
     assert manifest["batches"], "no training batches were emitted"
     graph = manifest["batches"][0]["graph"]
     assert graph["edge_index"]["shape"][0] == 2
+    assert graph["edge_index"]["path"].endswith(".safetensors")
     assert graph["negative"]["subject"]["shape"][1] == runtime.split.negatives
 
 
@@ -185,15 +188,15 @@ def test_prepare_dataset_is_deterministic(tmp_path: Path, monkeypatch: pytest.Mo
     _snapshot, dataset, _ = prepare(tmp_path, monkeypatch)
     first = {
         str(path.relative_to(dataset)): sha256_file(path)
-        for path in sorted(dataset.rglob("*.parquet"))
-        if "batches" not in path.parts
+        for path in sorted(dataset.rglob("*"))
+        if path.is_file() and path.suffix in {".parquet", ".safetensors"} and "batches" not in path.parts
     }
     shutil.rmtree(dataset)
     _, again, _ = prepare(tmp_path, monkeypatch)
     second = {
         str(path.relative_to(again)): sha256_file(path)
-        for path in sorted(again.rglob("*.parquet"))
-        if "batches" not in path.parts
+        for path in sorted(again.rglob("*"))
+        if path.is_file() and path.suffix in {".parquet", ".safetensors"} and "batches" not in path.parts
     }
     assert first == second
 
@@ -233,6 +236,18 @@ def test_sql_split_case_matches_python_reference() -> None:
         assert group_split(group_id, settings, schema=split == 3) == split
 
 
+def test_feature_tensor_conversion_rejects_nulls(tmp_path: Path) -> None:
+    from ced.model.feature_store import _convert_parquet_tensor, _read_parquet_tensor
+
+    source = tmp_path / "nulls.parquet"
+    pq.write_table(pa.table({"value": pa.array([1, None], pa.int64())}), source)
+    with pytest.raises(ValueError, match="contains nulls"):
+        _read_parquet_tensor(source, "value", "int64")
+    with pytest.raises(ValueError, match="contains nulls"):
+        _convert_parquet_tensor(source, "value", "int64", tmp_path / "nulls.safetensors")
+    assert not list(tmp_path.glob("*.tmp-*"))
+
+
 def test_write_indptr_covers_owners_without_rows(tmp_path: Path) -> None:
     """CSR offsets must give every owner an explicit entry, including empty ones.
 
@@ -257,7 +272,7 @@ def test_write_indptr_covers_owners_without_rows(tmp_path: Path) -> None:
     )
     connection = duckdb.connect()
     try:
-        reference = write_indptr(connection, source, 7, tmp_path / "categorical-indptr.parquet")
+        reference = write_indptr(connection, source, 7, tmp_path / "categorical-indptr.safetensors")
     finally:
         connection.close()
     assert reference.shape == [8]
@@ -284,13 +299,13 @@ def test_write_indptr_rejects_owners_outside_range(tmp_path: Path) -> None:
     connection = duckdb.connect()
     try:
         with pytest.raises(ValueError, match="CSR invariants"):
-            write_indptr(connection, source, 5, tmp_path / "categorical-indptr.parquet")
+            write_indptr(connection, source, 5, tmp_path / "categorical-indptr.safetensors")
     finally:
         connection.close()
 
 
 def test_prepare_dataset_emits_ordered_feature_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Feature columns are streamed Parquet, owner-ordered, with a valid CSR index.
+    """Feature columns are owner-ordered safetensors with a valid CSR index.
 
     Why: the ORDER BY in each COPY is load-bearing. FeatureIndex selects rows by
     binary search over the owner column, so an unordered file would silently return
@@ -303,10 +318,11 @@ def test_prepare_dataset_emits_ordered_feature_store(tmp_path: Path, monkeypatch
 
     categorical = features["categorical"]
     for name, reference in categorical.items():
-        assert reference["path"].endswith(".parquet"), name
+        assert reference["path"].endswith(".safetensors"), name
         assert reference["dtype"] == "int64", name
-    assert categorical["owner_id"]["path"] == "categorical.parquet"
-    assert categorical["indptr"]["path"] == "categorical-indptr.parquet"
+    assert categorical["owner_id"]["path"] == "categorical-owner_index.safetensors"
+    assert categorical["indptr"]["path"] == "categorical-indptr.safetensors"
+    assert not list(dataset.rglob("*.partial.parquet"))
 
     owners = manifest["entities"] + manifest["statements"]
     owner_column = TensorRef.model_validate(categorical["owner_id"]).load(dataset)
@@ -373,6 +389,7 @@ def test_encode_dataset_text_resolves_every_record(tmp_path: Path, monkeypatch: 
     assert index.column("row").to_pylist() == [0]
     assert index.column("role").to_pylist() == ["statement"]
     assert len(store.parts) == 1
+    assert store.parts[0].path.endswith(".safetensors")
     assert store.parts[0].load(tmp_path).shape == (1, 8)
     parts_before = [reference.path for reference in store.parts]
     digest_before = sha256_file(Path(store.index_path))

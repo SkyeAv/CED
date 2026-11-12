@@ -143,8 +143,8 @@ def test_batch_shards_and_tensor_bytes_are_identical_to_reference(tmp_path: Path
     assert [example.model_dump(mode="json") for example in produced] == [
         example.model_dump(mode="json") for example in expected
     ]
-    reference_files = sorted(path.relative_to(reference_root) for path in reference_root.rglob("*.parquet"))
-    produced_files = sorted(path.relative_to(produced_root) for path in produced_root.rglob("*.parquet"))
+    reference_files = sorted(path.relative_to(reference_root) for path in reference_root.rglob("*.safetensors"))
+    produced_files = sorted(path.relative_to(produced_root) for path in produced_root.rglob("*.safetensors"))
     assert produced_files == reference_files
     for relative in reference_files:
         assert (produced_root / relative).read_bytes() == (reference_root / relative).read_bytes(), relative
@@ -163,5 +163,5 @@ def test_batch_shards_disk_path_is_identical_to_reference(tmp_path: Path) -> Non
     assert [example.model_dump(mode="json") for example in produced] == [
         example.model_dump(mode="json") for example in expected
     ]
-    for relative in sorted(path.relative_to(reference_root) for path in reference_root.rglob("*.parquet")):
+    for relative in sorted(path.relative_to(reference_root) for path in reference_root.rglob("*.safetensors")):
         assert (produced_root / relative).read_bytes() == (reference_root / relative).read_bytes(), relative

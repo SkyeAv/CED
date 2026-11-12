@@ -50,7 +50,7 @@ class FeatureFieldSpec(ConfigBase):
 class TensorRef(ConfigBase):
     """One tensor inside a dataset artifact.
 
-    Several refs may address different `column` values of the same Parquet file;
+    Several refs may address different `column` entries of one safetensors file;
     the file checksum is then repeated across them, which is harmless because
     manifest checksums and Modal uploads are both keyed by path.
     """
@@ -64,9 +64,9 @@ class TensorRef(ConfigBase):
     def load(self, root: Path) -> np.ndarray:
         """Return the tensor as an owned C-contiguous array.
 
-        `read_tensor` enforces the checksum, dtype, null freedom, element count and
-        contiguity, so a mismatched or truncated artifact raises instead of being
-        silently reshaped into wrong indices.
+        `read_tensor` enforces the checksum, dtype, shape and contiguity, so a
+        mismatched or truncated artifact raises instead of being silently reshaped
+        into wrong indices.
         """
         validate_checksums(root, {self.path: self.sha256})
         return read_tensor(root / self.path, column=self.column, dtype=self.dtype, shape=self.shape)
@@ -170,7 +170,7 @@ class FeatureStoreArtifact(ConfigBase):
 
 
 class DatasetManifest(ConfigBase):
-    schema_version: int = 1
+    schema_version: int = 2
     dataset_id: str
     snapshot_id: str
     seed: int

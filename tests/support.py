@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 
 from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.model.prepare import save_tensor
-from ced.model.schemas import DatasetManifest, GraphBatch, NegativeBatch, TensorRef, TrainingExample
+from ced.model.schemas import DatasetManifest, GraphBatch, NegativeBatch, TrainingExample
 
 
 def write_table(path: Path, column: str, values: list[Any]) -> None:
@@ -43,30 +43,12 @@ def synthetic_dataset(root: Path, *, batches: int = 3, nodes_per_batch: int = 64
         ),
         root / "entities.parquet",
     )
-    topology_digest = sha256_file(root / "topology.parquet")
-    entities_digest = sha256_file(root / "entities.parquet")
-
-    def topology_ref(column: str, dtype: str) -> TensorRef:
-        return TensorRef(
-            path="topology.parquet",
-            column=column,
-            dtype=dtype,
-            shape=[statements],
-            sha256=topology_digest,
-        )
-
     tensors = {
-        "head": topology_ref("head", "int64"),
-        "tail": topology_ref("tail", "int64"),
-        "relation_id": topology_ref("relation_id", "int64"),
-        "split": topology_ref("split", "int8"),
-        "type_set_id": TensorRef(
-            path="entities.parquet",
-            column="type_set_id",
-            dtype="int64",
-            shape=[statements],
-            sha256=entities_digest,
-        ),
+        "head": save_tensor(root, "head", np.array([0, 0, 1], dtype=np.int64)),
+        "tail": save_tensor(root, "tail", np.array([1, 2, 2], dtype=np.int64)),
+        "relation_id": save_tensor(root, "relation_id", np.zeros(statements, dtype=np.int64)),
+        "split": save_tensor(root, "split", np.array([0, 1, 2], dtype=np.int8)),
+        "type_set_id": save_tensor(root, "type_set_id", np.zeros(statements, dtype=np.int64)),
     }
     write_table(root / "relations.parquet", "id", ["p"])
     write_table(root / "types.parquet", "categories", [["biolink:Gene"]])

@@ -130,6 +130,8 @@ Use sampled ranking for very large candidate spaces; exact ranking remains the d
 
 Sentence Transformers support is optional and centralized in `src/ced/model/encoding.py`. The default provider is `none`; tests use deterministic random encoders or mocked models and never download weights. Configure `text_encoding.provider=sentence_transformers` and a locally available model before running `ced encode-text`.
 
+Tensor artifacts use dataset schema 2. After upgrading, run `ced prepare` and then `ced encode-text` again; Parquet-backed datasets and embedding caches are not migrated or deleted automatically.
+
 ## Development
 
-Keep code typed, concise, Ruff-formatted, and Pyright-clean. Use PyTorch for model and matrix math. NumPy and Arrow handle in-memory arrays and DuckDB handoff, with conversion to Torch tensors before computation. Every persisted tensor is a Parquet column written by a streaming DuckDB `COPY` and read back through `TensorRef`; preparation never memory-maps or iterates per statement. Tests must remain offline and hermetic unless explicitly marked and approved.
+Keep code typed, concise, Ruff-formatted, and Pyright-clean. Use PyTorch for model and matrix math. NumPy and Arrow handle in-memory arrays and DuckDB handoff, with conversion to Torch tensors before computation. Persist topology, feature, batch, and embedding tensors as `.safetensors` files read through `TensorRef`; reserve Parquet for tabular KG data, vocabularies, and indexes. Preparation streams DuckDB results and never iterates per statement. Tests must remain offline and hermetic unless explicitly marked and approved.

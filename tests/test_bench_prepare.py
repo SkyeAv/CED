@@ -132,4 +132,4 @@ def test_bench_prepare_reports_wall_time_and_peak_rss(tmp_path: Path) -> None:
     datasets = list((root / "datasets").iterdir())
     assert len(datasets) == 1
     suffixes = {path.suffix for path in datasets[0].rglob("*") if path.is_file() and path.name != "manifest.json"}
-    assert suffixes <= {".parquet", ".json"}
+    assert suffixes <= {".parquet", ".json", ".safetensors"}

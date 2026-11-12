@@ -92,15 +92,15 @@ def create_text_encoder(settings: TextEncodingSettings) -> TextEncoder:
 
 
 def encoder_key(settings: TextEncodingSettings) -> str:
-    payload = settings.model_dump(mode="json", exclude={"cache_subdirectory"})
+    payload = settings.model_dump(mode="json", exclude={"cache_subdirectory"}) | {"tensor_format": "safetensors"}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:32]
 
 
 class TextEmbeddingCache:
     """Append-only content-addressed dense-text store.
 
-    Embeddings live in immutable Parquet parts and the sha -> row index in
-    matching index parts. Appending N texts writes O(N) bytes; the previous
+    Embeddings live in immutable safetensors parts and the sha -> row index in
+    matching Parquet index parts. Appending N texts writes O(N) bytes; the previous
     single-array design rewrote every existing row on every run, which is
     O(total) per call and O(total^2) across incremental runs.
     """
@@ -138,7 +138,7 @@ class TextEmbeddingCache:
         what lets a crashed run self-heal, because the next append reuses the name.
         Reading an explicit list also avoids DuckDB's failure on an empty glob.
         """
-        names = [str(part["name"]) for part in self.manifest()["parts"]]
+        names = [Path(str(part["name"])).with_suffix(".parquet").name for part in self.manifest()["parts"]]
         if not names:
             connection.execute("CREATE OR REPLACE TEMP TABLE cache_index (text_sha256 VARCHAR, row BIGINT)")
             return
@@ -168,12 +168,13 @@ class TextEmbeddingCache:
             nonlocal row, pending_keys, pending, pending_rows
             if not pending_rows:
                 return
-            name = f"part-{len(parts):06d}.parquet"
+            name = f"part-{len(parts):06d}.safetensors"
+            index_name = f"part-{len(parts):06d}.parquet"
             vectors = np.concatenate(pending) if len(pending) > 1 else pending[0]
             write_tensor(self.parts / name, vectors)
             # Atomic like the vector part: a concurrent reader must never observe a
             # half-written index, and a torn file stays an ignored orphan.
-            temporary = self.index / f"{name}.tmp-{os.getpid()}"
+            temporary = self.index / f"{index_name}.tmp-{os.getpid()}"
             pq.write_table(
                 pa.table(
                     {
@@ -184,7 +185,7 @@ class TextEmbeddingCache:
                 temporary,
                 compression="zstd",
             )
-            temporary.replace(self.index / name)
+            temporary.replace(self.index / index_name)
             parts.append({"name": name, "rows": pending_rows})
             row += pending_rows
             pending_keys, pending, pending_rows = [], [], 0

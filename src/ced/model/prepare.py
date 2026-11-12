@@ -20,9 +20,9 @@ from ced.preflight import require_cpu_worker, require_disk
 
 
 def save_tensor(root: Path, name: str, values: np.ndarray) -> TensorRef:
-    """Serialize one in-memory tensor to Parquet and return its manifest reference."""
+    """Serialize one in-memory tensor to safetensors and return its manifest reference."""
     array = np.ascontiguousarray(values)
-    path = root / f"{name}.parquet"
+    path = root / f"{name}.safetensors"
     write_tensor(path, array)
     return TensorRef(path=path.name, dtype=str(array.dtype), shape=list(array.shape), sha256=sha256_file(path))
 
@@ -33,7 +33,7 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
     source = runtime.artifact_path("snapshots", snapshot)
     manifest = json.loads((source / "manifest.json").read_text())
     validate_checksums(source, json.loads((source / "checksums.json").read_text()))
-    dataset_id = hashlib.sha256(f"{snapshot}\0{runtime.split.model_dump_json()}\0topology-v2".encode()).hexdigest()
+    dataset_id = hashlib.sha256(f"{snapshot}\0{runtime.split.model_dump_json()}\0topology-v3".encode()).hexdigest()
     target = runtime.artifact_path("datasets", dataset_id)
     if target.exists():
         raise FileExistsError(target)
@@ -101,43 +101,6 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
         assert topology_rows is not None
         if topology_rows[0] != total:
             raise ValueError("statement topology row count mismatch")
-        tensors = {
-            "head": TensorRef(
-                path="topology.parquet",
-                column="head",
-                dtype="int64",
-                shape=[total],
-                sha256=sha256_file(root / "topology.parquet"),
-            ),
-            "tail": TensorRef(
-                path="topology.parquet",
-                column="tail",
-                dtype="int64",
-                shape=[total],
-                sha256=sha256_file(root / "topology.parquet"),
-            ),
-            "relation_id": TensorRef(
-                path="topology.parquet",
-                column="relation_id",
-                dtype="int64",
-                shape=[total],
-                sha256=sha256_file(root / "topology.parquet"),
-            ),
-            "split": TensorRef(
-                path="topology.parquet",
-                column="split",
-                dtype="int8",
-                shape=[total],
-                sha256=sha256_file(root / "topology.parquet"),
-            ),
-            "type_set_id": TensorRef(
-                path="entities.parquet",
-                column="type_set_id",
-                dtype="int64",
-                shape=[counts["nodes"]],
-                sha256=sha256_file(root / "entities.parquet"),
-            ),
-        }
         # Shard sampling needs random access to the topology. It runs from RAM at a
         # documented budget of roughly 26 bytes per statement; see
         # .ralph/specs/performance-and-memory.md.
@@ -151,6 +114,7 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
             .column("type_set_id")
             .to_numpy(zero_copy_only=False),
         }
+        tensors = {name: save_tensor(root, name, values) for name, values in arrays.items()}
         relation_count = connection.execute("SELECT count(*) FROM relations").fetchone()
         assert relation_count is not None
         fields, feature_artifact = prepare_features(connection, source, root, counts["nodes"], total)
