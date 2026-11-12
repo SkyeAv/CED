@@ -39,6 +39,7 @@ dev = [
   "prek>=0.3",
   "pyright>=1.1.400",
   "pytest>=8.4",
+  "pytest-xdist>=3.8",
   "ruff>=0.14",
   "yamllint>=1.38",
 ]
@@ -80,4 +81,4 @@ markers = [
   "fullmap: requires the existing wenceslaus fullmap",
   "perf: fixed-workload performance benchmarks, excluded from the default gate",
 ]
-addopts = "-m 'not network and not gpu and not fullmap and not perf'"
+addopts = "-m 'not network and not gpu and not fullmap and not perf' -n 4 --dist loadfile"

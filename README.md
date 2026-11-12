@@ -21,7 +21,7 @@ ced sync
 ced check
 ```
 
-`ced sync` rsyncs the local checkout to `CED_REMOTE_PROJECT` and installs the frozen uv environment. It excludes `.git`, `.venv`, `.ced`, `.env`, `.tablassert`, `plans`, and caches.
+`ced sync` rsyncs the local checkout to `CED_REMOTE_PROJECT` and installs the frozen uv environment. It excludes `.git`, `.venv`, `.ced`, `.env`, `.tablassert`, `plans`, and caches. Run `uv run prek install` in each wenceslaus Git checkout after hook changes to install or refresh both hook stages.
 
 Important environment variables:
 
@@ -54,7 +54,7 @@ ced train <dataset-id> --resume <run-id> --yes
 ced evaluate <run-id> --split test --ranking exact --yes
 ```
 
-`ced check` runs the full remote gate: `uv lock --check`, Ruff, Pyright, pytest, and strict YAML lint. Default pytest excludes `network`, `gpu`, and `fullmap` tests.
+`ced check` runs the full remote gate: `uv lock --check`, Ruff, Pyright, pytest, and strict YAML lint. The gate runs pytest with four xdist workers and one thread per worker, excluding `network`, `gpu`, `fullmap`, and `perf` tests by default; use `uv run pytest -n 0` remotely for serial debugging. The prek pre-push hook runs this gate on wenceslaus. On the laptop, run `ced check` first and use `git push --no-verify` so no check executes locally.
 
 ## Acquisition and concurrency
 

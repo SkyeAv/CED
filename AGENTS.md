@@ -18,7 +18,7 @@ The local `ced` process only syncs code and delegates work:
 
 ```sh
 ced sync                 # sync source/config/lockfiles; never delete or expose .ced or credentials
-ced check                # remote Ruff, Pyright, pytest, uv lock, and YAML gate
+ced check                # remote Ruff, Pyright, four-worker pytest-xdist, uv lock, and YAML gate
 ced sources list         # inspect declarative sources without downloading them
 ced fetch --source chembl
 ced fetch --group translator
@@ -43,7 +43,7 @@ uv lock --check
 uv run prek run --all-files
 ```
 
-Do not run those remote debugging commands locally. Do not let a local commit hook launch lint or tests; run hooks and commits that need hooks in the remote checkout after synchronization. Tests are offline and hermetic by default. Network integration, large downloads, full builds, dataset preparations, and paid GPU jobs require explicit selection and approval; do not run them as routine implementation verification.
+Do not run those remote debugging commands locally. Do not let a local commit hook launch lint or tests; run hooks and commits that need hooks in the remote checkout after synchronization. Use `git push --no-verify` on the laptop so the pre-push hook never launches checks locally; run `ced check` first. A normal `git push` on wenceslaus runs the same full gate through prek. Run `uv run prek install` in each wenceslaus Git checkout after hook changes; `ced sync` excludes `.git` and cannot install hooks. Tests are offline and hermetic by default. Network integration, large downloads, full builds, dataset preparations, and paid GPU jobs require explicit selection and approval; do not run them as routine implementation verification.
 
 ## Layout
 
@@ -70,4 +70,4 @@ Do not run those remote debugging commands locally. Do not let a local commit ho
 
 ## Verification boundary
 
-`ced check` and all smoke tests run on wenceslaus using synthetic fixtures. Verify bounded memory, deterministic artifacts, split isolation, global typed negatives, finite gradients, checkpoint resume, and artifact checksums remotely. Do not run actual graph builds, dataset preparations, downloads, or paid Modal jobs during routine verification. Modal smoke jobs use tiny synthetic tensors and ephemeral storage, require explicit approval, and clean up in `finally`. Never download unnamed datasets or fullmap during verification.
+`ced check` and all smoke tests run on wenceslaus using synthetic fixtures. The `ced check` gate uses four xdist workers with one thread per worker; use `uv run pytest -n 0` remotely for serial debugging. Verify bounded memory, deterministic artifacts, split isolation, global typed negatives, finite gradients, checkpoint resume, and artifact checksums remotely. Do not run actual graph builds, dataset preparations, downloads, or paid Modal jobs during routine verification. Modal smoke jobs use tiny synthetic tensors and ephemeral storage, require explicit approval, and clean up in `finally`. Never download unnamed datasets or fullmap during verification.
