@@ -2,6 +2,12 @@
 
 CED builds an extensible multi-source KGX graph and trains a relational graph autoencoder for held-out link prediction. Python 3.13, uv, Cyclopts, Pydantic, Tablassert, PyTorch, PyG, and Modal.
 
+## Scientific goal and deliverables
+
+Read [DELIVERABLES.md](DELIVERABLES.md) before planning model, analysis, or reporting changes. It defines the focused MDPI Journal of Personalized Medicine paper: cluster all 24 CED type 1 families with family-size weighting, build an interpretable datamap, and predict known and novel global/per-family treatment associations, including off-label repurposing.
+
+Preserve distinct `applied_to_treat` and `treats` semantics, family qualifiers, and provenance. Report calibrated association probabilities only when supported; never label them clinical-benefit probabilities. Prefer direct clinical profiles and evidence-backed explanations over a required secondary classifier. Future-patient JSON matching is an optional research supplement. The document is a roadmap, not a claim that these outputs already exist.
+
 ## Execution safety
 
 - The local workstation is for editing, reading, synchronization, and CLI orchestration only. Do not run tests, lint, type checks, builds, downloads, Python pipelines, or other CPU-heavy work locally, including tiny tests.
