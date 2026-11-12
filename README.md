@@ -32,7 +32,6 @@ Important environment variables:
 | `CED_ARTIFACT_ROOT` | Gitignored artifact directory, relative to the remote project |
 | `CED_FULLMAP` | Existing fullmap database path |
 | `CED_CPU_WORKERS` | Hard CPU worker cap; must remain `4` |
-| `CED_ISOLATED_TREE_MAX_NODES` | Maximum disconnected tree component size to prune during preparation; `0` disables; default `2` |
 | `CED_DOWNLOAD_JOBS` | Artifacts downloaded concurrently by `ced fetch`; `1`-`4` |
 | `CED_TEXT_GPU` | Modal text inference GPU; default `L4` |
 | `CED_DOWNLOAD_CONNECTIONS` | Connections per file for `aria2`, and the segment cap for `http`; `1`-`32` |
@@ -51,6 +50,9 @@ ced build --source ced --source amalgam --fullmap-path /home/sgoetz/Desktop/full
 ced build --group translator
 ced prepare <snapshot-id>
 ced encode-text <dataset-id> --provider random
+# Optional: encode statement attributes (e.g. effect size/type) as per-edge model inputs
+# through the configured text encoder for categorical values and z-scored numerics.
+ced encode-attributes <dataset-id> --provider random
 ced encode-publications <dataset-id> --download --yes
 ced train <dataset-id> --epochs 1 --seed 20261110 --yes
 ced train <dataset-id> --resume <run-id> --yes
@@ -92,12 +94,6 @@ Every snapshot, graph, and dataset writes checksums. Preparation and Modal plann
 
 `scripts/bench_prepare.py` measures preparation on a synthetic snapshot (no download, no fullmap) and reports wall seconds plus peak RSS. It runs only on `wenceslaus` and is covered by `pytest -k bench`.
 
-## Preparation pruning
-
-`ced prepare` removes disconnected tree components with at most `preprocessing.isolated_tree_max_nodes` nodes before assigning splits or fitting features. Connectivity ignores statement direction. A component is a tree only when its multigraph has exactly one fewer statement than nodes, so parallel statements and self-loops are retained. The default of `2` removes isolated nodes and isolated two-node, single-statement pairs without applying a global k-core or deleting leaves attached to larger components. Set `CED_ISOLATED_TREE_MAX_NODES=0` to disable pruning or choose a larger explicit threshold.
-
-Every dataset manifest records the threshold, input counts, and pruned component, node, and statement counts in `pruning`. Pruning configuration participates in the dataset ID, so different thresholds cannot reuse the same prepared artifact. Statement endpoints are processed in batches; component labels require O(input node count) additional NumPy memory outside DuckDB's configured memory limit.
-
 ## Adding a source
 
 Adding a compatible KGX, Translator-release, Hugging Face, direct-URL, archive, or local source should require YAML only.
@@ -137,17 +133,7 @@ Use sampled ranking for very large candidate spaces; exact ranking remains the d
 
 ## Text encoding
 
-Sentence Transformers support is optional. The default provider is `none`; tests use deterministic random encoders or mocked models and never download weights. The default model is `Qwen/Qwen3-Embedding-0.6B`, pinned to revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`, with 1024-dimensional output. Make that revision available in the local Hugging Face cache, then run:
-
-```sh
-ced encode-text <dataset-id> --provider sentence_transformers
-```
-
-`local_files_only=true` is the default, so this command never downloads weights implicitly. `--model`, `--revision`, and `--dimension` override the text encoder; selecting a different model without an explicit revision clears the default pin.
-
-Encoding covers ordinary long node/statement text, every predicate, and every distinct qualifier key-value pair. Predicate text uses the canonical ID plus stored names and definitions when available. Qualifier text preserves the exact key and JSON value, including singleton and held-out occurrences; no frequency threshold removes rare qualifiers. Dataset-local `safetensors` tensors align predicate vectors with `relations.parquet` and qualifier vectors with a statement CSR index; Parquet is reserved for text and join tables.
-
-`src/ced/model/semantic.py` compresses frozen predicate and qualifier vectors through separate trainable autoencoder heads. Their bottleneck codes and a learned direction embedding form the encoder's statement features. Reconstruction loss uses only predicates and qualifiers on selected training statements, and `semantic_weight` controls its contribution during `train_batches`. Frozen vectors and sparse indices are non-persistent buffers, so checkpoints contain the learned heads without duplicating the Qwen artifact. Datasets without a `semantic` manifest entry retain the original random feature provider.
+Sentence Transformers support is optional and centralized in `src/ced/model/encoding.py`. The default provider is `none`; tests use deterministic random encoders or mocked models and never download weights. Configure `text_encoding.provider=sentence_transformers` and a locally available model before running `ced encode-text` or `ced encode-attributes`. The two commands share one append-only embedding cache keyed by `text_sha256(text)`; `encode-attributes` additionally materializes the statement-attribute tensors consumed by `StatementAttributeProvider` in `src/ced/model/statement_features.py`.
 
 Tensor artifacts use dataset schema 2. After upgrading, run `ced prepare` and then `ced encode-text` again; Parquet-backed datasets and embedding caches are not migrated or deleted automatically.
 

@@ -19,7 +19,7 @@ from torch import nn
 from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.config.models import RuntimeConfig, TextEncodingSettings
 from ced.kg.audit import validate_checksums
-from ced.model.feature_store import _convert_parquet_tensor, write_indptr
+from ced.model.feature_store import convert_parquet_tensor, write_indptr
 from ced.model.schemas import (
     DatasetManifest,
     DenseFeatureStore,
@@ -362,7 +362,7 @@ def _write_node_semantics(
     node_count = connection.execute("SELECT count(*) FROM entities").fetchone()
     assert node_count is not None
     prefix = _with_prefix(
-        _convert_parquet_tensor(prefix_path, "value", "int64", root / "node-prefixes.safetensors"), artifact_prefix
+        convert_parquet_tensor(prefix_path, "value", "int64", root / "node-prefixes.safetensors"), artifact_prefix
     )
     category_path = root / "node-categories.parquet"
     connection.execute(f"""COPY (SELECT CAST(e.idx AS BIGINT) AS owner_index, CAST(c.value_id AS BIGINT) AS value_id
@@ -372,7 +372,7 @@ def _write_node_semantics(
     category_rows = connection.execute(f"SELECT count(*) FROM read_parquet('{category_path}')").fetchone()
     assert category_rows is not None
     category = _with_prefix(
-        _convert_parquet_tensor(category_path, "value_id", "int64", root / "node-categories.safetensors"),
+        convert_parquet_tensor(category_path, "value_id", "int64", root / "node-categories.safetensors"),
         artifact_prefix,
     )
     indptr = _with_prefix(

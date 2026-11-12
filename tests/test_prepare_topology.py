@@ -257,14 +257,14 @@ def test_sql_split_case_matches_python_reference() -> None:
 
 
 def test_feature_tensor_conversion_rejects_nulls(tmp_path: Path) -> None:
-    from ced.model.feature_store import _convert_parquet_tensor, _read_parquet_tensor
+    from ced.model.feature_store import _read_parquet_tensor, convert_parquet_tensor
 
     source = tmp_path / "nulls.parquet"
     pq.write_table(pa.table({"value": pa.array([1, None], pa.int64())}), source)
     with pytest.raises(ValueError, match="contains nulls"):
         _read_parquet_tensor(source, "value", "int64")
     with pytest.raises(ValueError, match="contains nulls"):
-        _convert_parquet_tensor(source, "value", "int64", tmp_path / "nulls.safetensors")
+        convert_parquet_tensor(source, "value", "int64", tmp_path / "nulls.safetensors")
     assert not list(tmp_path.glob("*.tmp-*"))
 
 

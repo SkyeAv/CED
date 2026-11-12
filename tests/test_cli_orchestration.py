@@ -74,6 +74,7 @@ def test_cli_subcommands_delegate_exact_arguments(monkeypatch: pytest.MonkeyPatc
     cli.fetch(source=["chembl"], group=["translator"], all_enabled=True, yes=True)
     cli.prepare("snapshot-1")
     cli.encode_text("dataset-1", provider="random", dimension=8)
+    cli.encode_attributes("dataset-1", provider="random", dimension=8)
     cli.encode_publications("dataset-1", download=True, yes=True)
     cli.train("dataset-1", epochs=2, seed=7, resume="run-9", yes=True)
     cli.evaluate("run-9", split="validation", ranking="sampled", seed=7, yes=True)
@@ -85,6 +86,7 @@ def test_cli_subcommands_delegate_exact_arguments(monkeypatch: pytest.MonkeyPatc
         ["fetch", "--source", "chembl", "--group", "translator", "--all-enabled", "--yes"],
         ["prepare", "snapshot-1"],
         ["encode-text", "dataset-1", "--provider", "random", "--dimension", "8"],
+        ["encode-attributes", "dataset-1", "--provider", "random", "--dimension", "8"],
         ["encode-publications", "dataset-1", "--download", "--yes"],
         ["train", "dataset-1", "--epochs", "2", "--seed", "7", "--resume", "run-9", "--yes"],
         ["evaluate", "run-9", "--split", "validation", "--ranking", "sampled", "--seed", "7", "--yes"],

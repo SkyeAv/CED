@@ -21,7 +21,7 @@ from ced.model.encoding import (
     encoding_model,
     settings_batch_size,
 )
-from ced.model.feature_store import _convert_parquet_tensor, write_indptr
+from ced.model.feature_store import convert_parquet_tensor, write_indptr
 from ced.model.schemas import QualifierStatementCsr, SemanticFeatureStore, TensorRef
 from ced.model.tensors import read_tensor, write_tensor_stream
 from ced.preflight import require_disk
@@ -268,10 +268,10 @@ def encode_semantic_features(
         qualifier_ref = _write_embeddings(
             connection, work, "qualifier", "qualifier-embeddings.safetensors", qualifiers, dimension
         )
-        statement_ref = _convert_parquet_tensor(
+        statement_ref = convert_parquet_tensor(
             links_path, "statement_id", "int64", work / "statement-qualifier-statements.safetensors"
         )
-        qualifier_id_ref = _convert_parquet_tensor(
+        qualifier_id_ref = convert_parquet_tensor(
             links_path, "qualifier_id", "int64", work / "statement-qualifier-ids.safetensors"
         )
         indptr_ref = write_indptr(

@@ -204,6 +204,35 @@ def encode_publications(dataset: str, download: bool = False, yes: bool = False)
 
 
 @app.command
+def encode_attributes(
+    dataset: str, provider: str | None = None, model: str | None = None, dimension: int | None = None
+) -> None:
+    """Encode statement attributes (category texts and numerics) as per-edge model inputs."""
+    arguments = [
+        "encode-attributes",
+        dataset,
+        *(["--provider", provider] if provider else []),
+        *(["--model", model] if model else []),
+        *(["--dimension", str(dimension)] if dimension else []),
+    ]
+
+    def action() -> None:
+        from ced.config.models import TextEncodingSettings
+
+        runtime = load_runtime()
+        updates: dict[str, object] = {
+            name: value
+            for name, value in (("provider", provider), ("model", model), ("dimension", dimension))
+            if value is not None
+        }
+        if updates:
+            runtime.text_encoding = TextEncodingSettings.model_validate(runtime.text_encoding.model_dump() | updates)
+        import_module("ced.model.statement_encoding").encode_statement_attributes(runtime, dataset)
+
+    _remote_or_run(arguments, action)
+
+
+@app.command
 def train(dataset: str, epochs: int = 1, seed: int = 20261110, resume: str | None = None, yes: bool = False) -> None:
     """Run approved GPU training on Modal from prepared wenceslaus shards."""
     arguments = [

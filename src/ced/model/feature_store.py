@@ -33,7 +33,7 @@ def _write_feature_tensor(values: np.ndarray, destination: Path) -> TensorRef:
     )
 
 
-def _convert_parquet_tensor(source: Path, column: str, dtype: str, destination: Path) -> TensorRef:
+def convert_parquet_tensor(source: Path, column: str, dtype: str, destination: Path) -> TensorRef:
     """Convert one DuckDB output column in batches, without materializing it in RAM."""
     parquet = pq.ParquetFile(source)
 
@@ -165,7 +165,7 @@ def prepare_features(
     )
 
     def categorical_ref(column: str) -> TensorRef:
-        return _convert_parquet_tensor(categorical_path, column, "int64", root / f"categorical-{column}.safetensors")
+        return convert_parquet_tensor(categorical_path, column, "int64", root / f"categorical-{column}.safetensors")
 
     numeric_path = root / "numeric.partial.parquet"
     connection.execute(
@@ -176,7 +176,7 @@ def prepare_features(
     )
 
     def numeric_ref(column: str, dtype: str) -> TensorRef:
-        return _convert_parquet_tensor(numeric_path, column, dtype, root / f"numeric-{column}.safetensors")
+        return convert_parquet_tensor(numeric_path, column, dtype, root / f"numeric-{column}.safetensors")
 
     try:
         artifact = FeatureStoreArtifact(
