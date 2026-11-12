@@ -23,6 +23,8 @@ modal:
   base_image: nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
   python_version: '3.13'
   torch_index_url: https://download.pytorch.org/whl/cu124
+preprocessing:
+  isolated_tree_max_nodes: ${CED_ISOLATED_TREE_MAX_NODES:-2}
 split:
   seed: 20261110
   train: 0.8
