@@ -21,7 +21,7 @@ import torch
 from ced.acquisition.base import sha256_file
 from ced.config.models import RuntimeConfig, SplitSettings
 from ced.kg.audit import validate_checksums
-from ced.kg.writer import ATTRIBUTE_SCHEMA, NODE_SCHEMA, STATEMENT_SCHEMA
+from ced.kg.writer import ATTRIBUTE_SCHEMA, NODE_SCHEMA, PREDICATE_SCHEMA, STATEMENT_SCHEMA
 from ced.model.encoding import encode_dataset_text
 from ced.model.feature_index import FeatureIndex
 from ced.model.prepare import prepare_dataset
@@ -50,11 +50,26 @@ STATEMENTS = {
     "relation_role": ["asserted"] * 5 + ["schema"],
     "target_eligible": [True] * 6,
     "categories": [[]] * 6,
-    "qualifiers_json": ["{}"] * 6,
+    "qualifiers_json": [
+        '{"biolink:object_aspect_qualifier":"common","CED:rare_qualifier":{"value":1}}',
+        '{"biolink:object_aspect_qualifier":"common"}',
+        "{}",
+        '{"CED:held_out_qualifier":"singleton"}',
+        "{}",
+        "{}",
+    ],
     "attributes_json": ["{}"] * 6,
     "publications": [[]] * 6,
     "sources_json": ["[]"] * 6,
     "original_record_json": ["{}"] * 6,
+}
+PREDICATES = {
+    "id": ["p0", "p1", "p2"],
+    "source_id": ["bench"] * 3,
+    "native_id": ["0", "1", "2"],
+    "name": ["causes", "affects", "associated with"],
+    "definition": ["causes", "affects", "associated with"],
+    "attributes_json": ["{}", "{}", "{}"],
 }
 ATTRIBUTES = {
     "owner_kind": ["node", "node", "statement"],
@@ -77,6 +92,7 @@ def write_snapshot(root: Path) -> None:
         ("nodes", NODE_SCHEMA, NODES),
         ("statements", STATEMENT_SCHEMA, STATEMENTS),
         ("attributes", ATTRIBUTE_SCHEMA, ATTRIBUTES),
+        ("predicates", PREDICATE_SCHEMA, PREDICATES),
     ):
         (root / name).mkdir(parents=True)
         columns = {field.name: table[field.name] for field in schema}
@@ -392,17 +408,31 @@ def test_encode_dataset_text_resolves_every_record(tmp_path: Path, monkeypatch: 
     assert index.num_rows == 1
     assert index.column("row").to_pylist() == [0]
     assert index.column("role").to_pylist() == ["statement"]
-    assert len(store.parts) == 1
-    assert store.parts[0].path.endswith(".safetensors")
+    assert len(store.parts) == 2
+    assert all(reference.path.endswith(".safetensors") for reference in store.parts)
     assert store.parts[0].load(tmp_path).shape == (1, 8)
+    assert store.parts[1].load(tmp_path).shape == (6, 8)
+    document = json.loads((dataset / "manifest.json").read_text())
+    semantic = document["semantic"]
+    assert semantic["model"] == _runtime.text_encoding.model
+    assert semantic["relations"] == 3
+    assert semantic["qualifier_count"] == 3
+    assert TensorRef.model_validate(semantic["predicates"]).load(dataset).shape == (3, 8)
+    assert TensorRef.model_validate(semantic["qualifiers"]).load(dataset).shape == (3, 8)
+    qualifier_text = pq.read_table(dataset / "qualifier-text.parquet").column("text").to_pylist()
+    assert any("CED:rare_qualifier" in text for text in qualifier_text)
+    assert any("CED:held_out_qualifier" in text for text in qualifier_text)
+    assert TensorRef.model_validate(semantic["statement_qualifiers"]["indptr"]).load(dataset).shape == (7,)
     parts_before = [reference.path for reference in store.parts]
     digest_before = sha256_file(Path(store.index_path))
+    semantic_digest_before = sha256_file(dataset / "qualifier-embeddings.safetensors")
 
     # A second run encodes nothing new: no extra parts and a byte-identical index.
     again = encode_dataset_text(runtime, dataset.name)
     assert again.rows == store.rows
     assert [reference.path for reference in again.parts] == parts_before
     assert sha256_file(Path(again.index_path)) == digest_before
+    assert sha256_file(dataset / "qualifier-embeddings.safetensors") == semantic_digest_before
     assert not (dataset / "text-records.partial.parquet").exists()
     assert not (dataset / "text-missing.partial.parquet").exists()
 

@@ -47,8 +47,9 @@ class SplitSettings(ConfigBase):
 
 class TextEncodingSettings(ConfigBase):
     provider: Literal["none", "random", "sentence_transformers"] = "none"
-    model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    dimension: int = Field(default=384, gt=0)
+    model: str = "Qwen/Qwen3-Embedding-0.6B"
+    revision: str | None = None
+    dimension: int = Field(default=1024, gt=0)
     batch_size: int = Field(default=64, gt=0)
     max_length: int = Field(default=256, gt=0)
     normalize: bool = True

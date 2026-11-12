@@ -1,11 +1,13 @@
 import shlex
 import tomllib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from ced.cli import encode_text
 from ced.config.loader import _expand_env
-from ced.config.models import RuntimeConfig, SplitSettings
+from ced.config.models import RuntimeConfig, SplitSettings, TextEncodingSettings
 from ced.preflight import require_cpu_worker
 from ced.remote import RemoteExecutor, run_quality_gate
 
@@ -100,3 +102,20 @@ def test_quality_gate_uses_pyright_and_bounded_xdist(tmp_path: Path, monkeypatch
     assert pytest_environment["CED_CPU_WORKERS"] == "2"
     thread_limits = {name: pytest_environment[name] for name in config.worker_environment if name.endswith("THREADS")}
     assert set(thread_limits.values()) == {"1"}
+
+
+def test_encode_text_retains_pin_for_same_model_and_clears_it_for_a_different_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = runtime(tmp_path)
+    config.text_encoding = TextEncodingSettings(revision="pinned")
+    monkeypatch.setattr("ced.cli.is_remote_worker", lambda: True)
+    monkeypatch.setattr("ced.cli.load_runtime", lambda: config)
+    monkeypatch.setattr(
+        "ced.cli.import_module",
+        lambda name: SimpleNamespace(encode_dataset_text=lambda runtime, dataset: None),
+    )
+    encode_text("dataset", model=config.text_encoding.model)
+    assert config.text_encoding.revision == "pinned"
+    encode_text("dataset", model="different/model")
+    assert config.text_encoding.revision is None

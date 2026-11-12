@@ -114,6 +114,8 @@ def dataset_transfer_plan(root: Path, runtime: RuntimeConfig, mode: str) -> Tran
     else:
         for item in _tensor_paths(manifest.get("tensors", {})):
             shared_names.add(item)
+    for item in _tensor_paths(manifest.get("semantic", {})):
+        shared_names.add(item)
     for name in shared_names:
         path = root / name
         if not path.is_file():

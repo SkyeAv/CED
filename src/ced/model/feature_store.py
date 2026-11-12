@@ -57,7 +57,14 @@ def _convert_parquet_tensor(source: Path, column: str, dtype: str, destination: 
     )
 
 
-def write_indptr(connection: duckdb.DuckDBPyConnection, source: Path, owners: int, destination: Path) -> TensorRef:
+def write_indptr(
+    connection: duckdb.DuckDBPyConnection,
+    source: Path,
+    owners: int,
+    destination: Path,
+    *,
+    owner_column: str = "owner_index",
+) -> TensorRef:
     """Write safetensors CSR offsets for every owner in [0, owners].
 
     ``indptr[o]`` is the number of rows whose owner index is below ``o``, so owners
@@ -75,9 +82,9 @@ def write_indptr(connection: duckdb.DuckDBPyConnection, source: Path, owners: in
                          AS BIGINT) AS value
               FROM (SELECT g.owner AS owner, coalesce(p.n, 0) AS n
                     FROM generate_series(0, {owners}) AS g(owner)
-                    LEFT JOIN (SELECT owner_index, count(*) AS n
-                               FROM read_parquet('{source}') GROUP BY owner_index) p
-                      ON p.owner_index = g.owner)
+                    LEFT JOIN (SELECT {owner_column}, count(*) AS n
+                               FROM read_parquet('{source}') GROUP BY {owner_column}) p
+                      ON p.{owner_column} = g.owner)
               ORDER BY owner)
             TO '{temporary}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
         )
