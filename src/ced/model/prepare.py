@@ -12,6 +12,7 @@ from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.config.models import RuntimeConfig
 from ced.kg.audit import validate_checksums
 from ced.model.feature_store import prepare_features
+from ced.model.pruning import prune_isolated_trees
 from ced.model.schemas import DatasetManifest, TensorRef, VocabularyArtifact
 from ced.model.shards import write_batch_shards
 from ced.model.split import split_bounds
@@ -33,7 +34,9 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
     source = runtime.artifact_path("snapshots", snapshot)
     manifest = json.loads((source / "manifest.json").read_text())
     validate_checksums(source, json.loads((source / "checksums.json").read_text()))
-    dataset_id = hashlib.sha256(f"{snapshot}\0{runtime.split.model_dump_json()}\0topology-v3".encode()).hexdigest()
+    dataset_id = hashlib.sha256(
+        f"{snapshot}\0{runtime.split.model_dump_json()}\0{runtime.preprocessing.model_dump_json()}\0topology-v4".encode()
+    ).hexdigest()
     target = runtime.artifact_path("datasets", dataset_id)
     if target.exists():
         raise FileExistsError(target)
@@ -50,14 +53,29 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
         connection.execute("SET temp_directory=?", [str(root / "spill")])
         connection.read_parquet(str(source / "nodes/*.parquet")).create_view("nodes")
         connection.read_parquet(str(source / "statements/*.parquet")).create_view("statements")
+        pruning = prune_isolated_trees(connection, runtime.preprocessing.isolated_tree_max_nodes)
+        if pruning.input_nodes != counts["nodes"] or pruning.input_statements != counts["statements"]:
+            raise ValueError("snapshot manifest counts do not match pruning inputs")
+        entity_count = pruning.input_nodes - pruning.pruned_nodes
+        total = pruning.input_statements - pruning.pruned_statements
+        if entity_count == 0 or total == 0:
+            raise ValueError("isolated-tree pruning must retain at least one node and one statement")
         connection.execute(
-            "CREATE TABLE entities AS SELECT id, row_number() OVER (ORDER BY id)-1 AS idx, categories, mapping_status FROM nodes"
+            """CREATE TABLE entities AS
+            SELECT n.id, CAST(row_number() OVER (ORDER BY n.id) - 1 AS BIGINT) AS idx, n.categories, n.mapping_status
+            FROM nodes n LEFT JOIN pruned_nodes p ON n.id = p.id WHERE p.id IS NULL"""
         )
         connection.execute(
-            "CREATE TABLE relations AS SELECT predicate AS id, row_number() OVER (ORDER BY predicate)-1 AS idx FROM (SELECT DISTINCT predicate FROM statements)"
+            """CREATE VIEW retained_statements AS
+            SELECT s.* FROM statements s
+            LEFT JOIN pruned_nodes h ON s.subject = h.id LEFT JOIN pruned_nodes t ON s.object = t.id
+            WHERE h.id IS NULL AND t.id IS NULL"""
         )
         connection.execute(
-            "CREATE TABLE types AS SELECT categories, row_number() OVER (ORDER BY categories)-1 AS idx FROM (SELECT DISTINCT list_sort(categories) AS categories FROM nodes)"
+            "CREATE TABLE relations AS SELECT predicate AS id, row_number() OVER (ORDER BY predicate)-1 AS idx FROM (SELECT DISTINCT predicate FROM retained_statements)"
+        )
+        connection.execute(
+            "CREATE TABLE types AS SELECT categories, row_number() OVER (ORDER BY categories)-1 AS idx FROM (SELECT DISTINCT list_sort(categories) AS categories FROM entities)"
         )
         connection.execute(
             """COPY (
@@ -69,7 +87,6 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
         )
         for name in ("relations", "types"):
             connection.execute(f"COPY {name} TO '{root / (name + '.parquet')}' (FORMAT PARQUET, COMPRESSION ZSTD)")
-        total = counts["statements"]
         train_bound, valid_bound = split_bounds(runtime.split)
         seed = str(runtime.split.seed)
         # One streaming COPY replaces the per-row Python loop and its write-mode
@@ -89,7 +106,7 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
                 FROM (
                     SELECT s.id, s.relation_role AS role, h.idx AS head, r.idx AS relation, t.idx AS tail,
                         sha256(s.subject || chr(0) || s.predicate || chr(0) || s.object) AS group_id
-                    FROM statements s JOIN entities h ON s.subject = h.id JOIN entities t ON s.object = t.id
+                    FROM retained_statements s JOIN entities h ON s.subject = h.id JOIN entities t ON s.object = t.id
                     JOIN relations r ON s.predicate = r.id) g
                 ORDER BY g.id)
                TO '{topology}' (FORMAT PARQUET, COMPRESSION ZSTD)""".format(topology=root / "topology.parquet"),
@@ -117,9 +134,9 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
         tensors = {name: save_tensor(root, name, values) for name, values in arrays.items()}
         relation_count = connection.execute("SELECT count(*) FROM relations").fetchone()
         assert relation_count is not None
-        fields, feature_artifact = prepare_features(connection, source, root, counts["nodes"], total)
+        fields, feature_artifact = prepare_features(connection, source, root, entity_count, total)
         # The in-memory positive filter is only acceptable for small graphs; production shards use DiskGraph.
-        in_memory = counts["statements"] <= 100_000 and counts["nodes"] <= 200_000
+        in_memory = total <= 100_000 and entity_count <= 200_000
         examples = write_batch_shards(root, arrays, runtime, in_memory=in_memory)
         checksums = {
             str(path.relative_to(root)): sha256_file(path)
@@ -137,7 +154,8 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
             dataset_id=dataset_id,
             snapshot_id=snapshot,
             seed=runtime.split.seed,
-            entities=counts["nodes"],
+            pruning=pruning,
+            entities=entity_count,
             relations=relation_count[0],
             statements=total,
             tensors=tensors,

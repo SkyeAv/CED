@@ -7,6 +7,8 @@ export CED_FULLMAP=/home/sgoetz/Desktop/fullmap
 export CED_CPU_WORKERS=4
 export CED_MEMORY_LIMIT=16GB
 export CED_DISK_RESERVE_GB=32
+# Prune disconnected tree components up to this node count during preparation (0 disables).
+export CED_ISOLATED_TREE_MAX_NODES=2
 # Connections per file: aria2 -x and the segmented http backend's maximum segment count.
 export CED_DOWNLOAD_CONNECTIONS=8
 # Sources fetched concurrently by `ced fetch` (1-4).

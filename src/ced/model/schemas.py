@@ -169,11 +169,21 @@ class FeatureStoreArtifact(ConfigBase):
     text: list[TextRecord] = Field(default_factory=list)
 
 
+class IsolationTreePruningReport(ConfigBase):
+    max_component_nodes: int = Field(ge=0)
+    input_nodes: int = Field(ge=0)
+    input_statements: int = Field(ge=0)
+    pruned_components: int = Field(ge=0)
+    pruned_nodes: int = Field(ge=0)
+    pruned_statements: int = Field(ge=0)
+
+
 class DatasetManifest(ConfigBase):
     schema_version: int = 2
     dataset_id: str
     snapshot_id: str
     seed: int
+    pruning: IsolationTreePruningReport | None = None
     fit_split: Literal["train", "all"] = "train"
     entities: int = Field(gt=0)
     relations: int = Field(gt=0)

@@ -86,7 +86,11 @@ def write_snapshot(root: Path) -> None:
             {
                 "schema_version": 1,
                 "snapshot_hash": "bench",
-                "counts": {"nodes": 4, "statements": 6, "attributes": 3},
+                "counts": {
+                    "nodes": len(NODES["id"]),
+                    "statements": len(STATEMENTS["id"]),
+                    "attributes": len(ATTRIBUTES["owner_kind"]),
+                },
             }
         ),
         encoding="utf-8",

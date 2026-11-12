@@ -26,6 +26,11 @@ class ModalSettings(ConfigBase):
     torch_index_url: str = "https://download.pytorch.org/whl/cu124"
 
 
+class PreprocessingSettings(ConfigBase):
+    # Zero disables pruning. The default removes only singleton and two-node trees.
+    isolated_tree_max_nodes: int = Field(default=2, ge=0)
+
+
 class SplitSettings(ConfigBase):
     seed: int = 20261110
     train: float = Field(default=0.8, gt=0, lt=1)
@@ -77,6 +82,7 @@ class RuntimeConfig(ConfigBase):
     source_directory: Path = Path("src/ced/config/sources")
     graph_config: Path = Path("src/ced/graphs/ced-graph.yaml")
     modal: ModalSettings = Field(default_factory=ModalSettings)
+    preprocessing: PreprocessingSettings = Field(default_factory=PreprocessingSettings)
     split: SplitSettings = Field(default_factory=SplitSettings)
     batch: BatchSettings = Field(default_factory=BatchSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)

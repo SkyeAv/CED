@@ -32,6 +32,7 @@ Important environment variables:
 | `CED_ARTIFACT_ROOT` | Gitignored artifact directory, relative to the remote project |
 | `CED_FULLMAP` | Existing fullmap database path |
 | `CED_CPU_WORKERS` | Hard CPU worker cap; must remain `4` |
+| `CED_ISOLATED_TREE_MAX_NODES` | Maximum disconnected tree component size to prune during preparation; `0` disables; default `2` |
 | `CED_DOWNLOAD_JOBS` | Artifacts downloaded concurrently by `ced fetch`; `1`-`4` |
 | `CED_DOWNLOAD_CONNECTIONS` | Connections per file for `aria2`, and the segment cap for `http`; `1`-`32` |
 | `CED_MEMORY_LIMIT` | Process memory budget for canonicalization, merge, and reports |
@@ -88,6 +89,12 @@ Generated data stays under `.ced/` on the remote worker:
 Every snapshot, graph, and dataset writes checksums. Preparation and Modal planning validate them before use.
 
 `scripts/bench_prepare.py` measures preparation on a synthetic snapshot (no download, no fullmap) and reports wall seconds plus peak RSS. It runs only on `wenceslaus` and is covered by `pytest -k bench`.
+
+## Preparation pruning
+
+`ced prepare` removes disconnected tree components with at most `preprocessing.isolated_tree_max_nodes` nodes before assigning splits or fitting features. Connectivity ignores statement direction. A component is a tree only when its multigraph has exactly one fewer statement than nodes, so parallel statements and self-loops are retained. The default of `2` removes isolated nodes and isolated two-node, single-statement pairs without applying a global k-core or deleting leaves attached to larger components. Set `CED_ISOLATED_TREE_MAX_NODES=0` to disable pruning or choose a larger explicit threshold.
+
+Every dataset manifest records the threshold, input counts, and pruned component, node, and statement counts in `pruning`. Pruning configuration participates in the dataset ID, so different thresholds cannot reuse the same prepared artifact. Statement endpoints are processed in batches; component labels require O(input node count) additional NumPy memory outside DuckDB's configured memory limit.
 
 ## Adding a source
 
