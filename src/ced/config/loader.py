@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from dotenv import load_dotenv
 
 from ced.config.models import RuntimeConfig
 
@@ -39,5 +38,4 @@ def read_yaml(path: Path) -> Any:
 
 
 def load_runtime(path: Path = DEFAULT_CONFIG) -> RuntimeConfig:
-    load_dotenv(override=False)
     return RuntimeConfig.model_validate(_expand_env(read_yaml(path)))

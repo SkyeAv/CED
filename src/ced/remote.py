@@ -12,12 +12,23 @@ from ced.preflight import require_cpu_worker
 
 LOGGER = logging.getLogger(__name__)
 _UV_ENV = (
-    "PATH=/home/sgoetz/.local/bin:$PATH "
+    "PATH=/home/sgoetz/.local/bin:/home/sgoetz/.nix-profile/bin:$PATH "
     "XDG_DATA_HOME=/local_raid1/sgoetz/.local/share "
     "XDG_CACHE_HOME=/local_raid1/sgoetz/.cache "
     "UV_CACHE_DIR=/local_raid1/sgoetz/.cache/uv"
 )
-_SYNC_EXCLUDES = (".git", ".venv", ".ced", ".env", ".tablassert", "plans", "__pycache__", ".pytest_cache")
+# Machine configuration never syncs between checkouts; each machine keeps its own untracked .envrc.
+_SYNC_EXCLUDES = (
+    ".git",
+    ".venv",
+    ".ced",
+    ".env",
+    ".envrc",
+    ".tablassert",
+    "plans",
+    "__pycache__",
+    ".pytest_cache",
+)
 
 
 class RemoteExecutor:
@@ -26,9 +37,10 @@ class RemoteExecutor:
 
     def run(self, arguments: Sequence[str]) -> None:
         environment = " ".join(f"{key}={shlex.quote(value)}" for key, value in self.config.worker_environment.items())
+        inner = f"exec uv run --no-sync ced {shlex.join(arguments)}"
+        project = shlex.quote(str(self.config.remote_project))
         command = (
-            f"cd {shlex.quote(str(self.config.remote_project))} && "
-            f"export {_UV_ENV} {environment} && exec uv run --no-sync ced {shlex.join(arguments)}"
+            f"cd {project} && export {_UV_ENV} {environment} && exec direnv exec {project} bash -c {shlex.quote(inner)}"
         )
         subprocess.run(["ssh", self.config.remote_host, command], check=True)
 

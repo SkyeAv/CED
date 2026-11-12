@@ -4,6 +4,7 @@
 /.ced/
 /.tablassert/
 /.env
+/.envrc
 
 # Python bytecode and caches
 __pycache__/
