@@ -6,10 +6,48 @@ from pathlib import Path
 import numpy as np
 
 from ced.config.models import RuntimeConfig
-from ced.model.batches import sample_neighborhood
+from ced.model.batches import TrainAdjacency, sample_neighborhood
 from ced.model.disk_graph import DiskGraph
-from ced.model.negatives import sample_negatives, typed_pools
+from ced.model.negatives import negative_context, sample_negatives, typed_pools
 from ced.model.schemas import GraphBatch, NegativeBatch, TrainingExample
+
+
+def _edge_type_ids(edge_index: np.ndarray, relations: np.ndarray, splits: np.ndarray, types: np.ndarray) -> np.ndarray:
+    """Assign train edge-type ids by first occurrence without a Python row loop."""
+    edge_types = np.zeros(len(relations), dtype=np.int64)
+    train = np.flatnonzero(splits == 0)
+    if not train.size:
+        return edge_types
+    keys = np.column_stack((types[edge_index[0, train]], relations[train], types[edge_index[1, train]]))
+    relation_count = int(relations.max()) + 1
+    type_count = int(types.max()) + 1
+    # One-dimensional unique is substantially faster than structured row unique.
+    # Retain the overflow-free row path for arbitrary negative or huge ids.
+    if np.all(keys >= 0) and 0 < relation_count * type_count * type_count < 2**63:
+        encoded = (keys[:, 0] * relation_count + keys[:, 1]) * type_count + keys[:, 2]
+        _, first_positions, inverse = np.unique(encoded, return_index=True, return_inverse=True)
+    else:
+        _, first_positions, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    appearance = np.argsort(first_positions)
+    renumbered = np.empty(len(first_positions), dtype=np.int64)
+    renumbered[appearance] = np.arange(len(first_positions), dtype=np.int64)
+    edge_types[train] = renumbered[inverse]
+    return edge_types
+
+
+def _positive_triples(
+    edge_index: np.ndarray, relations: np.ndarray, positive: np.ndarray
+) -> list[tuple[int, int, int]]:
+    """Convert selected columns to Python triples without per-row scalar indexing."""
+    return list(
+        zip(
+            edge_index[0, positive].tolist(),
+            relations[positive].tolist(),
+            edge_index[1, positive].tolist(),
+            strict=True,
+        )
+    )
 
 
 def write_batch_shards(
@@ -28,24 +66,23 @@ def write_batch_shards(
     chunk_size = max(1, runtime.batch.node_limit // (2 * (runtime.split.negatives + 1)))
     disk: DiskGraph | None = None
     pools = typed_pools(edges, relations, splits, types) if in_memory else None
-    known = (
-        {(int(h), int(r), int(t)) for h, r, t in zip(edges[0], relations, edges[1], strict=True)} if in_memory else None
-    )
-    parameter_keys: dict[tuple[int, int, int], int] = {}
-    edge_types = np.zeros(len(relations), dtype=np.int64)
-    for index in np.flatnonzero(splits == 0):
-        key = (int(types[edges[0, index]]), int(relations[index]), int(types[edges[1, index]]))
-        edge_types[index] = parameter_keys.setdefault(key, len(parameter_keys))
+    # Built once for all chunks: the historical per-call full-edge mask scan was
+    # the dominant prepare cost on large graphs.
+    adjacency = TrainAdjacency(edges, splits) if in_memory else None
+    # Encoded once for all chunks: repeated per-chunk negative sampling must not
+    # re-walk every positive statement in Python.
+    context = negative_context(edges[0], relations, edges[1]) if in_memory else None
+    edge_types = _edge_type_ids(edges, relations, splits, types)
     for split_id, label in enumerate(("train", "validation", "test")):
         selected = np.flatnonzero(splits == split_id)
         for start in range(0, len(selected), chunk_size):
             positive = selected[start : start + chunk_size]
-            triples = [(int(edges[0, i]), int(relations[i]), int(edges[1, i])) for i in positive]
+            triples = _positive_triples(edges, relations, positive)
             if in_memory:
                 assert pools is not None
-                assert known is not None
+                assert context is not None
                 head, tail, valid = sample_negatives(
-                    triples, pools, known, count=runtime.split.negatives, seed=runtime.split.seed + start + split_id
+                    triples, pools, context, count=runtime.split.negatives, seed=runtime.split.seed + start + split_id
                 )
             else:
                 disk = disk or DiskGraph(root / "graph.db", arrays)
@@ -55,6 +92,7 @@ def write_batch_shards(
                 )
             seeds = np.unique(np.concatenate((edges[:, positive].ravel(), head[valid], tail[valid])))
             if in_memory:
+                assert adjacency is not None
                 neighborhood = sample_neighborhood(
                     edges,
                     relations,
@@ -64,6 +102,7 @@ def write_batch_shards(
                     seed=runtime.split.seed + start,
                     node_limit=runtime.batch.node_limit,
                     edge_types=edge_types,
+                    adjacency=adjacency,
                 )
             else:
                 assert disk is not None

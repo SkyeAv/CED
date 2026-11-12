@@ -9,7 +9,7 @@ import pytest
 from ced.config.models import SplitSettings
 from ced.kg.records import attribute_events
 from ced.model.features import fit_features
-from ced.model.negatives import sample_negatives, typed_pools
+from ced.model.negatives import negative_context, sample_negatives, typed_pools
 from ced.model.prepare import save_tensor
 from ced.model.split import group_split, statement_group
 
@@ -42,7 +42,8 @@ def test_negatives_use_global_ids_and_filter_all_positives() -> None:
     types = np.array([*([9] * 10), 1, 1, 2, 2, 2], dtype=np.int64)
     pools = typed_pools(edges, relations, splits, types)
     positives = {(10, 0, 12), (11, 0, 13), (10, 0, 13)}
-    head, tail, valid = sample_negatives([(10, 0, 12)], pools, positives, count=8, seed=1)
+    context = negative_context(edges[0], relations, edges[1])
+    head, tail, valid = sample_negatives([(10, 0, 12)], pools, context, count=8, seed=1)
     assert valid.any()
     for h, t, v in zip(head[0], tail[0], valid[0], strict=True):
         if v:
@@ -189,7 +190,7 @@ def test_neighbor_sampler_excludes_heldout_and_schema() -> None:
 
 def test_disk_graph_matches_in_memory_negatives_and_sampling(tmp_path: Path) -> None:
     from ced.model.disk_graph import DiskGraph
-    from ced.model.negatives import sample_negatives, typed_pools
+    from ced.model.negatives import negative_context, sample_negatives, typed_pools
 
     edges = np.array([[10, 10, 11, 12], [12, 13, 13, 13]], dtype=np.int64)
     relations = np.array([0, 1, 0, 1], dtype=np.int64)
@@ -197,6 +198,7 @@ def test_disk_graph_matches_in_memory_negatives_and_sampling(tmp_path: Path) -> 
     types = np.array([*([9] * 10), 1, 1, 2, 2], dtype=np.int64)
     positives = {(10, 0, 12), (11, 0, 13), (10, 1, 13)}
     pools = typed_pools(edges, relations, splits, types)
+    context = negative_context(edges[0], relations, edges[1])
     triples = [(10, 0, 12), (10, 1, 13)]
     disk = DiskGraph(
         tmp_path / "graph.db",
@@ -210,7 +212,7 @@ def test_disk_graph_matches_in_memory_negatives_and_sampling(tmp_path: Path) -> 
     )
     try:
         disk_heads, disk_tails, disk_valid = disk.negatives(triples, count=16, seed=7)
-        mem_heads, mem_tails, mem_valid = sample_negatives(triples, pools, positives, count=16, seed=7)
+        mem_heads, mem_tails, mem_valid = sample_negatives(triples, pools, context, count=16, seed=7)
         assert np.array_equal(disk_heads, mem_heads)
         assert np.array_equal(disk_tails, mem_tails)
         assert np.array_equal(disk_valid, mem_valid)

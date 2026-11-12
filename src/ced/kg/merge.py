@@ -19,10 +19,13 @@ def merge_nodes(root: Path, connection: duckdb.DuckDBPyConnection, *, group_rows
     writer = ParquetShardWriter(root / "nodes", NODE_SCHEMA)
     kgx = NdjsonShardWriter(root / "kgx/nodes")
     current: dict[str, Any] | None = None
+    current_native_ids: dict[str, str] = {}
 
     def emit() -> None:
         if current is None:
             return
+        # Serialize once per identity, not once per duplicate row.
+        current["native_ids_json"] = canonical_json(current_native_ids)
         writer.write([current])
         kgx.write(
             {
@@ -40,15 +43,14 @@ def merge_nodes(root: Path, connection: duckdb.DuckDBPyConnection, *, group_rows
             if current is None or current["id"] != row["id"]:
                 emit()
                 current = row
+                current_native_ids = json.loads(row["native_ids_json"])
                 continue
             for field in ("names", "categories", "in_taxon", "provided_by", "source_ids"):
                 current[field] = sorted(set(current[field]) | set(row[field]))
             if row["mapping_status"] in {"local", "unresolved_local"}:
                 current["mapping_status"] = row["mapping_status"]
             current["original_label"] = current["original_label"] or row["original_label"]
-            current["native_ids_json"] = canonical_json(
-                json.loads(current["native_ids_json"]) | json.loads(row["native_ids_json"])
-            )
+            current_native_ids |= json.loads(row["native_ids_json"])
             # Every original attribute remains authoritative in the long event table.
             current["attributes_json"] = "{}"
     emit()

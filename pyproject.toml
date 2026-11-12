@@ -78,5 +78,6 @@ markers = [
   "network: explicit bounded network integration",
   "gpu: explicit Modal GPU integration",
   "fullmap: requires the existing wenceslaus fullmap",
+  "perf: fixed-workload performance benchmarks, excluded from the default gate",
 ]
-addopts = "-m 'not network and not gpu and not fullmap'"
+addopts = "-m 'not network and not gpu and not fullmap and not perf'"

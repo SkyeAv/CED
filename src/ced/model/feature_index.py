@@ -60,6 +60,19 @@ class FeatureIndex:
     def statement_owner(self, statement_ids: torch.Tensor) -> torch.Tensor:
         return statement_ids + self.node_count
 
+    def to(self, device: torch.device) -> FeatureIndex:
+        """Move lookup tensors onto the training device once.
+
+        Without this every train step round-trips batch tensors through .cpu()
+        and forces host-device synchronizations; the range algebra itself is
+        device-agnostic.
+        """
+        for name in ("cat_owner", "cat_field", "cat_value", "num_owner", "num_field", "num_value", "num_valid"):
+            values = getattr(self, name, None)
+            if isinstance(values, torch.Tensor):
+                setattr(self, name, values.to(device))
+        return self
+
     def metadata(self, root: Path) -> tuple[dict[int, int], list[int]]:
         return load_feature_metadata(root)
 
