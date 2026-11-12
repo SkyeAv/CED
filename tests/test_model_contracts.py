@@ -51,15 +51,127 @@ def test_negatives_use_global_ids_and_filter_all_positives() -> None:
             assert t >= 12
 
 
-def test_tensor_ref_checks_actual_dtype_shape_and_hash(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("dtype", "values"),
+    [
+        ("int64", np.array([0, -1, 2], dtype=np.int64)),
+        ("float32", np.array([0.5, -1.25, 2.0], dtype=np.float32)),
+        ("bool", np.array([True, False, True])),
+        ("int8", np.array([0, 3, 2], dtype=np.int8)),
+    ],
+)
+def test_parquet_tensor_ref_round_trips_every_supported_dtype(tmp_path: Path, dtype: str, values: np.ndarray) -> None:
+    """Parquet is the only tensor encoding, so every model dtype must survive it exactly.
+
+    Why: a dtype that silently widens, changes signedness or decodes nulls as zeros
+    would corrupt entity indices and feature values long after preparation finished,
+    and nothing downstream re-checks the file.
+    """
+    from ced.model.tensors import DEFAULT_COLUMN
+
+    ref = save_tensor(tmp_path, "values", values)
+    assert ref.path == "values.parquet"
+    assert ref.column == DEFAULT_COLUMN
+    assert ref.dtype == dtype
+    assert ref.shape == [3]
+    assert (tmp_path / "values.parquet").is_file()
+    loaded = ref.load(tmp_path)
+    assert loaded.dtype == np.dtype(dtype)
+    assert np.array_equal(loaded, values)
+    assert loaded.flags.writeable
+    assert loaded.flags.c_contiguous
+
+
+def test_parquet_tensor_ref_restores_multidimensional_shape(tmp_path: Path) -> None:
+    """A rank-2 tensor must come back with its shape, from one flat C-order column.
+
+    Why: batch shards store (2, E) edge_index and (rows, negatives) candidate
+    matrices. Flattening on write and reshaping on read is the single convention
+    that covers every rank; getting it wrong would transpose message passing.
+    """
+    values = np.arange(6, dtype=np.int64).reshape(2, 3)
+    ref = save_tensor(tmp_path, "edge_index", values)
+    assert ref.shape == [2, 3]
+    loaded = ref.load(tmp_path)
+    assert loaded.shape == (2, 3)
+    assert np.array_equal(loaded, values)
+    assert loaded.flags.c_contiguous
+
+
+def test_parquet_tensor_refs_share_one_file_by_column(tmp_path: Path) -> None:
+    """Several refs may address different columns of one Parquet file.
+
+    Why: topology and feature artifacts are written by a single streaming DuckDB
+    COPY into one multi-column file. Each logical tensor still needs its own ref,
+    its own dtype check and its own shape, without duplicating the payload.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from ced.acquisition.base import sha256_file
+    from ced.model.schemas import TensorRef
+
+    pq.write_table(
+        pa.table({"head": pa.array([0, 1], pa.int64()), "tail": pa.array([1, 0], pa.int64())}),
+        tmp_path / "topology.parquet",
+        compression="zstd",
+    )
+    digest = sha256_file(tmp_path / "topology.parquet")
+
+    def ref(column: str) -> TensorRef:
+        return TensorRef(path="topology.parquet", column=column, dtype="int64", shape=[2], sha256=digest)
+
+    assert ref("head").load(tmp_path).tolist() == [0, 1]
+    assert ref("tail").load(tmp_path).tolist() == [1, 0]
+    with pytest.raises(ValueError, match="column is missing"):
+        ref("absent").load(tmp_path)
+    with pytest.raises(ValueError, match="dtype mismatch"):
+        ref("head").model_copy(update={"dtype": "float32"}).load(tmp_path)
+    with pytest.raises(ValueError, match="shape mismatch"):
+        ref("head").model_copy(update={"shape": [3]}).load(tmp_path)
+
+
+def test_parquet_tensor_ref_rejects_nulls_and_hash_mismatch(tmp_path: Path) -> None:
+    """A null in a tensor column and a mutated file must both fail loudly.
+
+    Why: nulls have no representation in the index tensors, and decoding them as
+    zeros would invent edges from entity 0. A mutated payload must be caught by the
+    checksum before it reaches training or evaluation.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from ced.acquisition.base import sha256_file
+    from ced.model.schemas import TensorRef
+
     ref = save_tensor(tmp_path, "ids", np.array([1, 2], dtype=np.int64))
     assert ref.load(tmp_path).tolist() == [1, 2]
-    bad = ref.model_copy(update={"shape": [3]})
-    with pytest.raises(ValueError, match="shape/dtype"):
-        bad.load(tmp_path)
-    np.save(tmp_path / ref.path, np.array([3, 4], dtype=np.int64))
+
+    pq.write_table(pa.table({"value": pa.array([1, None], pa.int64())}), tmp_path / "nulls.parquet", compression="zstd")
+    nulls = TensorRef(
+        path="nulls.parquet",
+        dtype="int64",
+        shape=[2],
+        sha256=sha256_file(tmp_path / "nulls.parquet"),
+    )
+    with pytest.raises(ValueError, match="contains nulls"):
+        nulls.load(tmp_path)
+
+    save_tensor(tmp_path, "ids", np.array([3, 4], dtype=np.int64))
     with pytest.raises(ValueError, match="checksum mismatch"):
         ref.load(tmp_path)
+
+
+def test_write_tensor_rejects_unsupported_dtype(tmp_path: Path) -> None:
+    """An unsupported dtype must raise rather than be quietly downcast.
+
+    Why: float64 is the natural dtype of a NumPy computation. Silently storing it as
+    float32 would change feature values; the writer must refuse instead.
+    """
+    from ced.model.tensors import write_tensor
+
+    with pytest.raises(ValueError, match="unsupported tensor dtype"):
+        write_tensor(tmp_path / "bad.parquet", np.array([1.0, 2.0], dtype=np.float64))
 
 
 def test_neighbor_sampler_excludes_heldout_and_schema() -> None:
@@ -87,7 +199,14 @@ def test_disk_graph_matches_in_memory_negatives_and_sampling(tmp_path: Path) -> 
     pools = typed_pools(edges, relations, splits, types)
     triples = [(10, 0, 12), (10, 1, 13)]
     disk = DiskGraph(
-        tmp_path / "graph.db", {"edge_index": edges, "relation_id": relations, "split": splits, "type_set_id": types}
+        tmp_path / "graph.db",
+        {
+            "head": edges[0],
+            "tail": edges[1],
+            "relation_id": relations,
+            "split": splits,
+            "type_set_id": types,
+        },
     )
     try:
         disk_heads, disk_tails, disk_valid = disk.negatives(triples, count=16, seed=7)
@@ -147,7 +266,8 @@ def test_training_checkpoint_resumes_epoch(tmp_path: Path) -> None:
 
     root = tmp_path
     topology = {
-        "edge_index": np.array([[0, 1], [1, 0]], dtype=np.int64),
+        "head": np.array([0, 1], dtype=np.int64),
+        "tail": np.array([1, 0], dtype=np.int64),
         "relation_id": np.array([0, 0], dtype=np.int64),
         "split": np.array([0, 1], dtype=np.int8),
         "type_set_id": np.array([0, 0], dtype=np.int64),
@@ -208,21 +328,66 @@ def test_random_text_encoder_is_deterministic_and_normalized() -> None:
     assert torch.allclose(first.norm(dim=-1), torch.ones(2))
 
 
-def test_text_embedding_cache_reuses_and_appends(tmp_path: Path) -> None:
+def test_text_embedding_cache_appends_parts_without_rewriting(tmp_path: Path) -> None:
+    """Appending writes only new parts and never reassigns an existing row id.
+
+    Why: the previous single-array cache rewrote every stored vector on every run,
+    so incremental encoding cost O(total) per call and O(total^2) overall. A
+    renumbered row would also silently point datasets that already reference
+    text-index.parquet at the wrong embedding.
+    """
     pytest.importorskip("torch")
+    import duckdb
+
+    from ced.acquisition.base import sha256_file
     from ced.config.models import TextEncodingSettings
     from ced.model.encoding import RandomTextEncoder, TextEmbeddingCache, text_key
 
     settings = TextEncodingSettings(provider="random", dimension=4, batch_size=2)
     encoder = RandomTextEncoder(4, seed=11)
     cache = TextEmbeddingCache(tmp_path, settings)
-    rows, entries = cache.embed(["one", "two"], encoder)
-    assert len(set(entries)) == 2
-    assert rows.tolist() == [entries[text_key("one")], entries[text_key("two")]]
-    rows2, entries2 = cache.embed(["one", "three"], encoder)
-    assert rows2[0] == rows[0]
-    assert entries2[text_key("one")] == entries[text_key("one")]
-    assert len(entries2) == 3
+
+    def batches(texts: list[str]):
+        return iter([(texts, encoder.encode(texts).detach().cpu().numpy())])
+
+    assert cache.append_stream(batches(["one", "two"])) == 2
+    first_parts = {path.name: sha256_file(path) for path in sorted(cache.parts.glob("*.parquet"))}
+    assert cache.append_stream(batches(["three"])) == 1
+
+    second_parts = {path.name: sha256_file(path) for path in sorted(cache.parts.glob("*.parquet"))}
+    assert first_parts == {name: second_parts[name] for name in first_parts}
+    assert len(second_parts) == len(first_parts) + 1
+    assert cache.manifest()["rows"] == 3
+
+    connection = duckdb.connect()
+    try:
+        cache.create_index(connection)
+        rows = dict(connection.execute("SELECT text_sha256, row FROM cache_index").fetchall())
+    finally:
+        connection.close()
+    assert rows == {text_key("one"): 0, text_key("two"): 1, text_key("three"): 2}
+
+    references = cache.part_refs()
+    assert [reference.shape for reference in references] == [[2, 4], [1, 4]]
+    loaded = references[1].load(tmp_path)
+    assert loaded.shape == (1, 4)
+    assert np.isfinite(loaded).all()
+
+
+def test_text_embedding_cache_rejects_wrong_dimension(tmp_path: Path) -> None:
+    """A batch whose width disagrees with the cache dimension must raise.
+
+    Why: writing a mis-shaped batch would corrupt every later row offset in the
+    part, and the damage would only surface as garbage embeddings much later.
+    """
+    pytest.importorskip("torch")
+    from ced.config.models import TextEncodingSettings
+    from ced.model.encoding import TextEmbeddingCache
+
+    settings = TextEncodingSettings(provider="random", dimension=4, batch_size=2)
+    cache = TextEmbeddingCache(tmp_path, settings)
+    with pytest.raises(ValueError, match="does not match cache dimension"):
+        cache.append_stream(iter([(["one"], np.zeros((1, 8), dtype=np.float32))]))
 
 
 def test_sentence_transformer_encoder_uses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -289,3 +454,85 @@ def test_evaluation_supports_exact_and_sampled_ranking(tmp_path: Path, synthetic
     assert (
         evaluate_dataset(root, split="test", seed=3, device="cpu", ranking="sampled", sampled_candidates=2) == sampled
     )
+
+
+def test_split_bounds_stay_inside_ubigint_for_a_zero_test_split() -> None:
+    """A zero test split must not push the validation bound past UBIGINT range.
+
+    Why: `train + validation == 1.0` gives an unclamped bound of 2**64, which needs 17
+    hex digits. The SQL split CASE casts the hex string to UBIGINT, so preparation
+    would abort with a conversion error while the Python reference kept working. The
+    two engines would disagree in a way no user could diagnose from the message.
+    """
+    import duckdb
+
+    from ced.model.split import split_bounds
+
+    settings = SplitSettings(train=0.9, validation=0.1, test=0.0)
+    train_bound, valid_bound = split_bounds(settings)
+    assert len(train_bound) <= 16
+    assert len(valid_bound) <= 16
+
+    connection = duckdb.connect()
+    try:
+        cast = connection.execute("SELECT ('0x' || ?)::UBIGINT, ('0x' || ?)::UBIGINT", [train_bound, valid_bound])
+        bounds = cast.fetchone()
+    finally:
+        connection.close()
+    assert bounds is not None
+    assert bounds[1] == 2**64 - 1
+
+    groups = [statement_group(f"X:{i}", "p", f"Y:{i}") for i in range(500)]
+    assert {group_split(group, settings) for group in groups} <= {0, 1}
+    for train, validation, test in ((0.8, 0.1, 0.1), (0.7, 0.2, 0.1), (0.6, 0.2, 0.2)):
+        bounds = split_bounds(SplitSettings(train=train, validation=validation, test=test))
+        assert all(int(bound, 16) <= 2**64 - 1 for bound in bounds)
+
+
+def test_text_embedding_cache_ignores_unpublished_index_parts(tmp_path: Path) -> None:
+    """An index part missing from the manifest must not make its texts look cached.
+
+    Why: a crash between the index part write and the manifest update leaves exactly
+    such an orphan. If the sha -> row table included it, the anti-join would skip those
+    texts, no rows would be appended, and the emitted text index would carry row ids
+    past the end of the published vectors. Every consumer would then read the wrong
+    embedding, or none, without any error being raised.
+    """
+    pytest.importorskip("torch")
+    import duckdb
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from ced.config.models import TextEncodingSettings
+    from ced.model.encoding import RandomTextEncoder, TextEmbeddingCache, text_key
+
+    settings = TextEncodingSettings(provider="random", dimension=4, batch_size=2)
+    encoder = RandomTextEncoder(4, seed=11)
+    cache = TextEmbeddingCache(tmp_path, settings)
+
+    def batches(texts: list[str]):
+        return iter([(texts, encoder.encode(texts).detach().cpu().numpy())])
+
+    assert cache.append_stream(batches(["one"])) == 1
+
+    # Simulate the crash: a complete index part the manifest never learned about.
+    pq.write_table(
+        pa.table({"text_sha256": pa.array([text_key("ghost")], pa.string()), "row": pa.array([1], pa.int64())}),
+        cache.index / "part-000001.parquet",
+    )
+
+    def index_rows() -> dict[str, int]:
+        connection = duckdb.connect()
+        try:
+            cache.create_index(connection)
+            return dict(connection.execute("SELECT text_sha256, row FROM cache_index").fetchall())
+        finally:
+            connection.close()
+
+    assert index_rows() == {text_key("one"): 0}
+
+    # The next append reuses the orphan name, so the crash self-heals.
+    assert cache.append_stream(batches(["two"])) == 1
+    assert [part["name"] for part in cache.manifest()["parts"]] == ["part-000000.parquet", "part-000001.parquet"]
+    assert index_rows() == {text_key("one"): 0, text_key("two"): 1}
+    assert not list(cache.index.glob("*.tmp-*"))

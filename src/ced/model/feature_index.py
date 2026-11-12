@@ -10,7 +10,7 @@ from ced.model.schemas import TensorRef
 
 def _tensor(reference: TensorRef | dict[str, object], root: Path) -> torch.Tensor:
     ref: TensorRef = reference if isinstance(reference, TensorRef) else TensorRef.model_validate(reference)
-    return torch.from_numpy(ref.load(root).copy())
+    return torch.from_numpy(ref.load(root))
 
 
 def _ranges(sorted_owner: torch.Tensor, owners: torch.Tensor) -> torch.Tensor:

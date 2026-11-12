@@ -6,6 +6,7 @@ from pathlib import Path
 
 import duckdb
 import numpy as np
+import pyarrow.parquet as pq
 
 from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.config.models import RuntimeConfig
@@ -13,14 +14,17 @@ from ced.kg.audit import validate_checksums
 from ced.model.feature_store import prepare_features
 from ced.model.schemas import DatasetManifest, TensorRef, VocabularyArtifact
 from ced.model.shards import write_batch_shards
-from ced.model.split import group_split, statement_group
+from ced.model.split import split_bounds
+from ced.model.tensors import write_tensor
 from ced.preflight import require_cpu_worker, require_disk
 
 
 def save_tensor(root: Path, name: str, values: np.ndarray) -> TensorRef:
-    path = root / f"{name}.npy"
-    np.save(path, np.ascontiguousarray(values), allow_pickle=False)
-    return TensorRef(path=path.name, dtype=str(values.dtype), shape=list(values.shape), sha256=sha256_file(path))
+    """Serialize one in-memory tensor to Parquet and return its manifest reference."""
+    array = np.ascontiguousarray(values)
+    path = root / f"{name}.parquet"
+    write_tensor(path, array)
+    return TensorRef(path=path.name, dtype=str(array.dtype), shape=list(array.shape), sha256=sha256_file(path))
 
 
 def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
@@ -29,7 +33,7 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
     source = runtime.artifact_path("snapshots", snapshot)
     manifest = json.loads((source / "manifest.json").read_text())
     validate_checksums(source, json.loads((source / "checksums.json").read_text()))
-    dataset_id = hashlib.sha256(f"{snapshot}\0{runtime.split.model_dump_json()}\0topology-v1".encode()).hexdigest()
+    dataset_id = hashlib.sha256(f"{snapshot}\0{runtime.split.model_dump_json()}\0topology-v2".encode()).hexdigest()
     target = runtime.artifact_path("datasets", dataset_id)
     if target.exists():
         raise FileExistsError(target)
@@ -55,54 +59,98 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
         connection.execute(
             "CREATE TABLE types AS SELECT categories, row_number() OVER (ORDER BY categories)-1 AS idx FROM (SELECT DISTINCT list_sort(categories) AS categories FROM nodes)"
         )
-        for name in ("entities", "relations", "types"):
+        connection.execute(
+            """COPY (
+                SELECT e.id, e.idx, e.categories, e.mapping_status,
+                       CAST(coalesce(t.idx, 0) AS BIGINT) AS type_set_id
+                FROM entities e LEFT JOIN types t ON list_sort(e.categories) = t.categories
+                ORDER BY e.idx)
+               TO '{entities}' (FORMAT PARQUET, COMPRESSION ZSTD)""".format(entities=root / "entities.parquet")
+        )
+        for name in ("relations", "types"):
             connection.execute(f"COPY {name} TO '{root / (name + '.parquet')}' (FORMAT PARQUET, COMPRESSION ZSTD)")
         total = counts["statements"]
-        arrays = {
-            "edge_index": np.lib.format.open_memmap(
-                root / "edge_index.npy", mode="w+", dtype="int64", shape=(2, total)
+        train_bound, valid_bound = split_bounds(runtime.split)
+        seed = str(runtime.split.seed)
+        # One streaming COPY replaces the per-row Python loop and its write-mode
+        # array files. group_id and split are computed in SQL; the split CASE is
+        # pinned to the Python reference by tests/test_prepare_topology.py.
+        connection.execute(
+            """COPY (
+                SELECT row_number() OVER (ORDER BY g.id) - 1 AS index, g.id AS statement_id, g.group_id,
+                    CAST(CASE WHEN g.role = 'schema' THEN 3
+                        WHEN ('0x' || substr(sha256(? || chr(0) || g.group_id), 1, 16))::UBIGINT
+                             < ('0x' || ?)::UBIGINT THEN 0
+                        WHEN ('0x' || substr(sha256(? || chr(0) || g.group_id), 1, 16))::UBIGINT
+                             < ('0x' || ?)::UBIGINT THEN 1
+                        ELSE 2 END AS TINYINT) AS split,
+                    CAST(g.head AS BIGINT) AS head, CAST(g.relation AS BIGINT) AS relation_id,
+                    CAST(g.tail AS BIGINT) AS tail
+                FROM (
+                    SELECT s.id, s.relation_role AS role, h.idx AS head, r.idx AS relation, t.idx AS tail,
+                        sha256(s.subject || chr(0) || s.predicate || chr(0) || s.object) AS group_id
+                    FROM statements s JOIN entities h ON s.subject = h.id JOIN entities t ON s.object = t.id
+                    JOIN relations r ON s.predicate = r.id) g
+                ORDER BY g.id)
+               TO '{topology}' (FORMAT PARQUET, COMPRESSION ZSTD)""".format(topology=root / "topology.parquet"),
+            [seed, train_bound, seed, valid_bound],
+        )
+        topology_rows = connection.execute(
+            f"SELECT count(*) FROM read_parquet('{root / 'topology.parquet'}')"
+        ).fetchone()
+        assert topology_rows is not None
+        if topology_rows[0] != total:
+            raise ValueError("statement topology row count mismatch")
+        tensors = {
+            "head": TensorRef(
+                path="topology.parquet",
+                column="head",
+                dtype="int64",
+                shape=[total],
+                sha256=sha256_file(root / "topology.parquet"),
             ),
-            "relation_id": np.lib.format.open_memmap(
-                root / "relation_id.npy", mode="w+", dtype="int64", shape=(total,)
+            "tail": TensorRef(
+                path="topology.parquet",
+                column="tail",
+                dtype="int64",
+                shape=[total],
+                sha256=sha256_file(root / "topology.parquet"),
             ),
-            "split": np.lib.format.open_memmap(root / "split.npy", mode="w+", dtype="int8", shape=(total,)),
-            "type_set_id": np.lib.format.open_memmap(
-                root / "type_set_id.npy", mode="w+", dtype="int64", shape=(counts["nodes"],)
+            "relation_id": TensorRef(
+                path="topology.parquet",
+                column="relation_id",
+                dtype="int64",
+                shape=[total],
+                sha256=sha256_file(root / "topology.parquet"),
+            ),
+            "split": TensorRef(
+                path="topology.parquet",
+                column="split",
+                dtype="int8",
+                shape=[total],
+                sha256=sha256_file(root / "topology.parquet"),
+            ),
+            "type_set_id": TensorRef(
+                path="entities.parquet",
+                column="type_set_id",
+                dtype="int64",
+                shape=[counts["nodes"]],
+                sha256=sha256_file(root / "entities.parquet"),
             ),
         }
-        position = 0
-        with (root / "split-records.ndjson").open("w", encoding="utf-8") as stream:
-            query = """SELECT s.id, s.subject, s.predicate, s.object, s.relation_role, h.idx AS head, r.idx AS relation, t.idx AS tail
-                FROM statements s JOIN entities h ON s.subject=h.id JOIN entities t ON s.object=t.id
-                JOIN relations r ON s.predicate=r.id ORDER BY s.id"""
-            for batch in connection.execute(query).fetch_record_batch(5000):
-                for row in batch.to_pylist():
-                    group = statement_group(row["subject"], row["predicate"], row["object"])
-                    split = group_split(group, runtime.split, schema=row["relation_role"] == "schema")
-                    arrays["edge_index"][:, position] = [row["head"], row["tail"]]
-                    arrays["relation_id"][position] = row["relation"]
-                    arrays["split"][position] = split
-                    stream.write(
-                        json.dumps({"index": position, "statement_id": row["id"], "group_id": group, "split": split})
-                        + "\n"
-                    )
-                    position += 1
-        if position != total:
-            raise ValueError("statement topology row count mismatch")
-        for batch in connection.execute(
-            "SELECT e.idx, t.idx AS type_id FROM entities e JOIN types t ON list_sort(e.categories)=t.categories ORDER BY e.idx"
-        ).fetch_record_batch(5000):
-            for row in batch.to_pylist():
-                arrays["type_set_id"][row["idx"]] = row["type_id"]
-        tensors = {}
-        for name, values in arrays.items():
-            values.flush()
-            tensors[name] = TensorRef(
-                path=f"{name}.npy",
-                dtype=str(values.dtype),
-                shape=list(values.shape),
-                sha256=sha256_file(root / f"{name}.npy"),
-            )
+        # Shard sampling needs random access to the topology. It runs from RAM at a
+        # documented budget of roughly 26 bytes per statement; see
+        # .ralph/specs/performance-and-memory.md.
+        topology = pq.read_table(root / "topology.parquet", columns=["head", "tail", "relation_id", "split"])
+        arrays = {
+            "head": topology.column("head").to_numpy(zero_copy_only=False),
+            "tail": topology.column("tail").to_numpy(zero_copy_only=False),
+            "relation_id": topology.column("relation_id").to_numpy(zero_copy_only=False),
+            "split": topology.column("split").to_numpy(zero_copy_only=False),
+            "type_set_id": pq.read_table(root / "entities.parquet", columns=["type_set_id"])
+            .column("type_set_id")
+            .to_numpy(zero_copy_only=False),
+        }
         relation_count = connection.execute("SELECT count(*) FROM relations").fetchone()
         assert relation_count is not None
         fields, feature_artifact = prepare_features(connection, source, root, counts["nodes"], total)

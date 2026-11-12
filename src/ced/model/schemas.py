@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from ced.config.models import ConfigBase
 from ced.kg.audit import validate_checksums
+from ced.model.tensors import DEFAULT_COLUMN, read_tensor
 
 
 class VocabularyArtifact(ConfigBase):
@@ -46,27 +47,29 @@ class FeatureFieldSpec(ConfigBase):
     missing_id: int = 1
 
 
-class SplitRecord(ConfigBase):
-    statement_id: str
-    group_id: str
-    split: Literal["train", "validation", "test", "schema"]
-
-
 class TensorRef(ConfigBase):
+    """One tensor inside a dataset artifact.
+
+    Several refs may address different `column` values of the same Parquet file;
+    the file checksum is then repeated across them, which is harmless because
+    manifest checksums and Modal uploads are both keyed by path.
+    """
+
     path: str
-    format: Literal["npy"] = "npy"
+    column: str = DEFAULT_COLUMN
     dtype: str = Field(pattern=r"^(int64|float32|bool|int8)$")
     shape: list[int]
     sha256: str
 
     def load(self, root: Path) -> np.ndarray:
+        """Return the tensor as an owned C-contiguous array.
+
+        `read_tensor` enforces the checksum, dtype, null freedom, element count and
+        contiguity, so a mismatched or truncated artifact raises instead of being
+        silently reshaped into wrong indices.
+        """
         validate_checksums(root, {self.path: self.sha256})
-        values = np.load(root / self.path, mmap_mode="r", allow_pickle=False)
-        if values.dtype != np.dtype(self.dtype) or list(values.shape) != self.shape:
-            raise ValueError(f"tensor shape/dtype mismatch: {self.path}")
-        if not values.flags.c_contiguous:
-            raise ValueError(f"noncontiguous tensor: {self.path}")
-        return values
+        return read_tensor(root / self.path, column=self.column, dtype=self.dtype, shape=self.shape)
 
 
 class TextRecord(ConfigBase):
@@ -95,7 +98,7 @@ class DenseFeatureStore(ConfigBase):
     dimension: int = Field(gt=0)
     rows: int = Field(ge=0)
     index_path: str
-    tensor: TensorRef
+    parts: list[TensorRef] = Field(default_factory=list)
     checksums: dict[str, str] = Field(default_factory=dict)
 
 
@@ -184,7 +187,13 @@ class DatasetManifest(ConfigBase):
 
     @model_validator(mode="after")
     def topology_shapes(self) -> DatasetManifest:
-        expected = {"edge_index": [2, self.statements], "relation_id": [self.statements], "split": [self.statements]}
+        expected = {
+            "head": [self.statements],
+            "tail": [self.statements],
+            "relation_id": [self.statements],
+            "split": [self.statements],
+            "type_set_id": [self.entities],
+        }
         for key, shape in expected.items():
             if key not in self.tensors or self.tensors[key].shape != shape:
                 raise ValueError(f"unaligned topology tensor: {key}")
