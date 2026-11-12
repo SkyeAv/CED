@@ -18,7 +18,7 @@ from ced.model.dense_features import RandomProjectionProvider, SemanticFeaturePr
 from ced.model.encoder import RelationalAttentionEncoder
 from ced.model.feature_index import FeatureIndex, load_feature_metadata
 from ced.model.losses import AuxiliaryAttributeDecoder, auxiliary_loss, link_loss
-from ced.model.schemas import GraphBatch, SemanticFeatureStore, TensorRef, TrainingExample
+from ced.model.schemas import GraphBatch, PublicationFeatureStore, SemanticFeatureStore, TensorRef, TrainingExample
 from ced.model.semantic import SemanticFeatureProvider as StatementSemanticFeatureProvider
 
 Device = Literal["auto", "cpu", "cuda"]
@@ -30,6 +30,53 @@ class FeatureProvider(Protocol):
     def statement_features(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor: ...
 
     def reconstruction_loss(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor | None: ...
+
+
+
+class PublicationFeatureProvider(RandomProjectionProvider):
+    """Add learned publication and evidence projections to random relation features."""
+
+    publication_vectors: torch.Tensor
+    publication_evidence: torch.Tensor
+
+    def __init__(
+        self,
+        dimension: int,
+        statement_dimension: int,
+        relations: int,
+        seed: int,
+        publication_vectors: torch.Tensor,
+        publication_evidence: torch.Tensor,
+        base: FeatureProvider | None = None,
+    ) -> None:
+        super().__init__(dimension, statement_dimension, relations, seed)
+        self.base = base
+        if publication_vectors.dtype != torch.float32 or publication_vectors.ndim != 2:
+            raise ValueError("publication vectors must be a float32 matrix")
+        if publication_evidence.dtype != torch.float32 or publication_evidence.shape != (publication_vectors.shape[0],):
+            raise ValueError("publication evidence must be one float32 value per statement")
+        self.register_buffer("publication_vectors", publication_vectors, persistent=False)
+        self.register_buffer("publication_evidence", publication_evidence, persistent=False)
+        self.publication_projection = nn.Linear(publication_vectors.shape[1] + 1, statement_dimension, bias=False)
+
+    def statement_features(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor:
+        base = (
+            self.base.statement_features(relation_id, statement_id)
+            if self.base is not None
+            else super().statement_features(relation_id, statement_id)
+        )
+        features = torch.cat(
+            (self.publication_vectors[statement_id], self.publication_evidence[statement_id, None]), dim=1
+        )
+        return base + self.publication_projection(features)
+
+    def node_features(self, global_node_id: torch.Tensor) -> torch.Tensor:
+        return (
+            self.base.node_features(global_node_id) if self.base is not None else super().node_features(global_node_id)
+        )
+
+    def reconstruction_loss(self, relation_id: torch.Tensor, statement_id: torch.Tensor) -> torch.Tensor | None:
+        return self.base.reconstruction_loss(relation_id, statement_id) if self.base is not None else None
 
 
 class RelationalAutoencoder(nn.Module):
@@ -76,6 +123,19 @@ def build_model(document: dict[str, Any], root: Path, edge_type_count: int, seed
         if dense.get("schema_version") != 1:
             raise ValueError("legacy dense features require re-running ced encode-text")
         features = SemanticFeatureProvider(document, root, seed, fallback=features)
+    if document.get("publications"):
+        publication_store = PublicationFeatureStore.model_validate(document["publications"])
+        if publication_store.statements != document["statements"]:
+            raise ValueError("publication features and dataset statements are not aligned")
+        features = PublicationFeatureProvider(
+            32,
+            16,
+            relation_count,
+            seed,
+            torch.from_numpy(publication_store.vectors.load(root)),
+            torch.from_numpy(publication_store.evidence.load(root)),
+            base=features,
+        )
     return RelationalAutoencoder(encoder=encoder, decoder=decoder, attributes=attributes, features=features)
 
 
@@ -93,7 +153,8 @@ def config_hash(
         "learning_rate": learning_rate,
         "seed": seed,
         "auxiliary_weight": auxiliary_weight,
-        "model_version": 2,
+        "publication_feature_key": (document.get("publications") or {}).get("feature_key"),
+        "model_version": 3,
     }
     if document.get("semantic"):
         payload.update(

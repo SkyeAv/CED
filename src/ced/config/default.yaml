@@ -66,3 +66,12 @@ text_encoding:
       model: Qwen/Qwen3-Embedding-0.6B
       revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
       dimension: 1024
+publication_embeddings:
+  repo_id: glusman-team/medcpt-ae
+  revision: 3c923644c682a9664f1409ce07ae4e78b622bcf5
+  filename: medcpt-embeddings-128.parquet
+  source_sha256: ef11c7dbb164c7d0ddb86458f3926a3dc4580e26dc139d32dfc32763af0456e8
+  size: 20449885518
+  dimension: 128
+  batch_size: 65536
+  fast_transfer: true
