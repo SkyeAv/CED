@@ -85,7 +85,9 @@ def write_batch_shards(
     # Encoded once for all chunks: repeated per-chunk negative sampling must not
     # re-walk every positive statement in Python.
     context = negative_context(edges[0], relations, edges[1]) if in_memory else None
-    edge_types = _edge_type_ids(edges, relations, splits, types)
+    edge_types = arrays.get("edge_type_id")
+    if edge_types is None:
+        edge_types = _edge_type_ids(edges, relations, splits, types)
     for split_id, label in enumerate(("train", "validation", "test")):
         selected = np.flatnonzero(splits == split_id)
         for start in range(0, len(selected), chunk_size):

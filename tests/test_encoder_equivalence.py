@@ -91,7 +91,7 @@ def test_encoder_gradients_match() -> None:
     expected.backward()
     actual.backward()
     for (name, want), (_, got) in zip(reference.named_parameters(), produced.named_parameters(), strict=True):
-        # Unexercised parameter groups (e.g. outputs beyond layers) stay None in both.
+        # Sparse relation groups leave their relation-specific projections unexercised.
         if want.grad is None or got.grad is None:
             assert want.grad is None, name
             assert got.grad is None, name

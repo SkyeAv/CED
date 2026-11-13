@@ -1,10 +1,8 @@
-"""Frozen pre-optimization reference for evaluation (do not edit).
+"""Independent evaluation reference for the persisted edge-type contract.
 
-Verbatim copy of src/ced/model/evaluation.py as of main commit 3b62f75, with the
-public entry point renamed evaluate_dataset -> evaluate_dataset_reference.
-tests/test_evaluation_equivalence.py proves the vectorized production version
-returns an identical report (mrr, hits, per-predicate/family groups, integer
-ranks) for both exact and sampled ranking on the synthetic fixture.
+The loop-based message construction and ungrouped scoring remain independent of
+the optimized implementation. Both sides consume the same persisted edge-type
+IDs; ranking and aggregation must remain numerically identical.
 """
 
 from __future__ import annotations
@@ -19,31 +17,24 @@ import torch  # pyright: ignore[reportMissingImports]
 
 from ced.model.negatives import TypedPools, typed_pools
 from ced.model.schemas import TensorRef
-from ced.model.training import Device, build_model, resolve_device
+from ced.model.training import Device, build_model, persisted_edge_type_count, resolve_device
 
 Ranking = Literal["exact", "sampled"]
 
 
 def _full_messages(
-    edge_index: torch.Tensor, relations: torch.Tensor, splits: torch.Tensor, types: torch.Tensor
+    edge_index: torch.Tensor, relations: torch.Tensor, splits: torch.Tensor, edge_types: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
     train = torch.nonzero(splits == 0).flatten()
     if not train.numel():
         raise ValueError("evaluation requires at least one training statement for topology")
-    keys: dict[tuple[int, int, int], int] = {}
-    forward = torch.zeros(train.numel(), dtype=torch.long)
-    reverse = torch.zeros(train.numel(), dtype=torch.long)
-    for position, index in enumerate(train.tolist()):
-        head, relation, tail = int(edge_index[0, index]), int(relations[index]), int(edge_index[1, index])
-        forward[position] = keys.setdefault((int(types[head]), relation, int(types[tail])), len(keys))
-        reverse[position] = keys.setdefault(
-            (int(types[tail]), relation + int(relations.max()) + 1, int(types[head])), len(keys)
-        )
+    forward = edge_types[train].clone()
+    reverse = edge_types[train].clone()
     return (
         torch.cat((edge_index[:, train], edge_index[[1, 0]][:, train]), dim=1),
         torch.cat((relations[train], relations[train] + int(relations.max()) + 1)),
         torch.cat((forward, reverse)),
-        len(keys),
+        1 + int(edge_types[train].max()),
     )
 
 
@@ -64,7 +55,9 @@ def sampled_rank(
     rng: np.random.Generator,
     count: int,
 ) -> int:
-    pool = np.array([], dtype=np.int64) if candidates is None else candidates
+    if candidates is None or candidates.size == 0:
+        raise ValueError("ranking candidate pool must not be empty")
+    pool = candidates
     if pool.size > count:
         pool = rng.choice(pool, size=count, replace=False)
     chosen = np.union1d(pool, np.array([target], dtype=np.int64))
@@ -99,29 +92,21 @@ def evaluate_dataset_reference(
     document = json.loads((root / "manifest.json").read_text())
     references = {name: TensorRef.model_validate(item) for name, item in document["tensors"].items()}
     arrays = {name: reference.load(root) for name, reference in references.items()}
-    pools: TypedPools | None = (
-        typed_pools(
-            np.stack((arrays["head"], arrays["tail"])), arrays["relation_id"], arrays["split"], arrays["type_set_id"]
-        )
-        if ranking == "sampled"
-        else None
+    pools: TypedPools = typed_pools(
+        np.stack((arrays["head"], arrays["tail"])), arrays["relation_id"], arrays["split"], arrays["type_set_id"]
     )
 
     def tensor(name: str) -> torch.Tensor:
         return torch.from_numpy(arrays[name]).to(resolved)
 
-    edge_index = torch.from_numpy(np.stack((arrays["head"], arrays["tail"])))
-    relations, splits, types = (
-        tensor("relation_id"),
-        tensor("split"),
-        tensor("type_set_id"),
+    edge_type_count = persisted_edge_type_count(document, root, arrays=arrays)
+    edge_index = torch.from_numpy(np.stack((arrays["head"], arrays["tail"]))).to(resolved)
+    relations, splits, edge_types = tensor("relation_id"), tensor("split"), tensor("edge_type_id")
+    messages, message_relations, message_types, message_count = _full_messages(
+        edge_index, relations, splits, edge_types
     )
-    messages, message_relations, message_types, edge_type_count = _full_messages(edge_index, relations, splits, types)
-    messages, message_relations, message_types = (
-        messages.to(resolved),
-        message_relations.to(resolved),
-        message_types.to(resolved),
-    )
+    if message_count != edge_type_count:
+        raise ValueError("edge type count differs between full evaluation messages and the manifest")
     model = build_model(document, root, edge_type_count, seed).to(resolved)
     if checkpoint is not None:
         model.load_state_dict(torch.load(checkpoint, map_location=resolved, weights_only=True)["state"])
@@ -149,33 +134,29 @@ def evaluate_dataset_reference(
     ranks: list[int] = []
     groups: dict[str, list[int]] = {}
     random = np.random.default_rng(seed)
+    candidate_count = sampled_candidates if ranking == "sampled" else int(document["entities"])
     with torch.no_grad():
         for target in targets.tolist():
             head, relation, tail = int(edge_index[0, target]), int(relations[target]), int(edge_index[1, target])
             relation_tensor = torch.full((state.shape[0],), relation, dtype=torch.long, device=resolved)
             tail_scores = model.decoder.score(state[head].expand_as(state), relation_tensor, state)
             head_scores = model.decoder.score(state, relation_tensor, state[tail].expand_as(state))
-            if ranking == "sampled":
-                assert pools is not None
-                tail_rank = sampled_rank(
-                    tail_scores,
-                    tail,
-                    positives.get((head, relation), set()),
-                    pools.objects.get(relation),
-                    random,
-                    sampled_candidates,
-                )
-                head_rank = sampled_rank(
-                    head_scores,
-                    head,
-                    positives.get((tail, relation), set()),
-                    pools.subjects.get(relation),
-                    random,
-                    sampled_candidates,
-                )
-            else:
-                tail_rank = filtered_rank(tail_scores, tail, positives.get((head, relation), set()))
-                head_rank = filtered_rank(head_scores, head, positives.get((tail, relation), set()))
+            tail_rank = sampled_rank(
+                tail_scores,
+                tail,
+                positives.get((head, relation), set()),
+                pools.objects.get(relation),
+                random,
+                candidate_count,
+            )
+            head_rank = sampled_rank(
+                head_scores,
+                head,
+                positives.get((tail, relation), set()),
+                pools.subjects.get(relation),
+                random,
+                candidate_count,
+            )
             for rank, predicate_id, endpoint in zip(
                 (tail_rank, head_rank), (relation, relation), (tail, head), strict=True
             ):

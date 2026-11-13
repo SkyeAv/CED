@@ -129,6 +129,7 @@ def dataset_transfer_plan(root: Path, runtime: RuntimeConfig, mode: str) -> Tran
     for item in _tensor_paths(manifest.get("statement_attributes", {})):
         shared_names.add(item)
     if mode == "train":
+        shared_names.update(manifest["tensors"][name]["path"] for name in ("edge_type_id", "split"))
         for item in _tensor_paths(manifest.get("features", {})):
             shared_names.add(item)
     else:
@@ -151,13 +152,11 @@ def dataset_transfer_plan(root: Path, runtime: RuntimeConfig, mode: str) -> Tran
             f"shared transfer size {shared_bytes} exceeds {runtime.modal.max_shared_bytes}; reduce feature payload or rotate it explicitly"
         )
     groups: list[BatchGroup] = []
-    edge_type_count: int | None = None
+    edge_type_count = int(manifest["edge_type_count"]) if mode == "train" else None
     if mode == "train":
         current = BatchGroup(indices=[], files={}, bytes=0)
         for index, example in enumerate(manifest["batches"]):
-            graph = TrainingExample.model_validate(example).graph
-            largest_type = int(graph.edge_type_id.load(root).max())
-            edge_type_count = max(edge_type_count or 0, largest_type + 1)
+            TrainingExample.model_validate(example)
             files = {path: root / path for path in _tensor_paths(example)}
             size = sum(path.stat().st_size for path in files.values())
             if size > runtime.modal.max_batch_group_bytes:

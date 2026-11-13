@@ -32,6 +32,29 @@ from ced.model.statement_features import StatementAttributeProvider
 Device = Literal["auto", "cpu", "cuda"]
 
 
+def persisted_edge_type_count(
+    document: dict[str, Any], root: Path, *, arrays: dict[str, np.ndarray] | None = None
+) -> int:
+    """Validate and return the single edge-type vocabulary shared by training and evaluation."""
+    count = document.get("edge_type_count")
+    reference = document.get("tensors", {}).get("edge_type_id")
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+        raise ValueError("edge type count must be a positive integer")
+    if reference is None:
+        raise ValueError("edge type tensor is missing from the dataset manifest")
+    if arrays is None:
+        arrays = {
+            name: TensorRef.model_validate(document["tensors"][name]).load(root) for name in ("edge_type_id", "split")
+        }
+    train = arrays["split"] == 0
+    if not np.any(train):
+        raise ValueError("edge type metadata requires at least one training statement")
+    observed = np.unique(arrays["edge_type_id"][train])
+    if not np.array_equal(observed, np.arange(count, dtype=observed.dtype)):
+        raise ValueError(f"edge type IDs do not form the declared contiguous vocabulary of size {count}")
+    return count
+
+
 class FeatureProvider(Protocol):
     def node_features(self, global_node_id: torch.Tensor) -> torch.Tensor: ...
 
@@ -164,11 +187,11 @@ def config_hash(
         "seed": seed,
         "auxiliary_weight": auxiliary_weight,
         "publication_feature_key": (document.get("publications") or {}).get("feature_key"),
-        "model_version": 3,
+        "model_version": 4,
     }
     if document.get("statement_attributes"):
         payload.update(
-            model_version=3,
+            model_version=4,
             attribute_weight=attribute_weight,
             statement_attributes=document["statement_attributes"],
         )
@@ -293,9 +316,6 @@ def train_step(
     statement_id = _load(graph.statement_id, root, device)
     positive = _load(graph.positive_statement_id, root, device)
     global_nodes = _load(graph.global_node_id, root, device)
-    edge_index, relation_id, edge_type_id, statement_id = _subsample(
-        edge_index, relation_id, edge_type_id, statement_id, memory_reduction, supervision=positive
-    )
     unique_statements = torch.unique(statement_id)
     selected = _supervision_mask(positive, unique_statements)
     positive = positive[selected]
@@ -306,6 +326,9 @@ def train_step(
     negative_subject = _load(graph.negative.subject, root, device)[selected]
     negative_object = _load(graph.negative.object, root, device)[selected]
     negative_valid = _load(graph.negative.valid, root, device)[selected]
+    edge_index, relation_id, edge_type_id, statement_id = _subsample(
+        edge_index, relation_id, edge_type_id, statement_id, memory_reduction, supervision=positive
+    )
     context = (
         torch.autocast("cuda", dtype=torch.bfloat16)
         if use_bf16 and device.type == "cuda"
@@ -390,10 +413,10 @@ def train_batches(
     resolved_device = resolve_device(device)
     if attribute_weight < 0:
         raise ValueError("attribute weight must be nonnegative")
-    if edge_type_count is None:
-        edge_type_count = 1 + max(
-            int(_load(example.graph.edge_type_id, root, torch.device("cpu")).max()) for example in examples
-        )
+    persisted_count = persisted_edge_type_count(document, root)
+    if edge_type_count is not None and edge_type_count != persisted_count:
+        raise ValueError(f"planned edge type count {edge_type_count} differs from persisted count {persisted_count}")
+    edge_type_count = persisted_count
     model = build_model(document, root, edge_type_count, seed).to(resolved_device)
     # fused AdamW is a CUDA-only kernel choice; the CPU path stays bitwise unchanged.
     optimizer = (
@@ -432,7 +455,16 @@ def train_batches(
             start_epoch = int(restored["epoch"])
             start_cursor = int(restored["cursor"])
         random.setstate(restored["rng"]["python"])
-        np.random.set_state(restored["rng"]["numpy"])
+        numpy_state = restored["rng"]["numpy"]
+        np.random.set_state(
+            (
+                numpy_state[0],
+                np.asarray(numpy_state[1], dtype=np.uint32),
+                int(numpy_state[2]),
+                int(numpy_state[3]),
+                float(numpy_state[4]),
+            )
+        )
         torch.set_rng_state(restored["rng"]["torch"])
     features = (
         FeatureIndex(root, document).to(resolved_device) if document.get("features", {}).get("categorical") else None
@@ -515,6 +547,7 @@ def train_batches(
         "reductions": float(reductions),
     }
     if checkpoint_path is not None:
+        numpy_state = np.random.get_state()
         _save_checkpoint(
             checkpoint_path,
             {
@@ -524,7 +557,11 @@ def train_batches(
                 "cursor": current_cursor,
                 "metrics": metrics,
                 "config_hash": identity,
-                "rng": {"python": random.getstate(), "numpy": np.random.get_state(), "torch": torch.get_rng_state()},
+                "rng": {
+                    "python": random.getstate(),
+                    "numpy": [numpy_state[0], numpy_state[1].tolist(), *numpy_state[2:]],
+                    "torch": torch.get_rng_state(),
+                },
                 "device": str(resolved_device),
             },
         )

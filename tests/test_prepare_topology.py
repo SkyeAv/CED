@@ -143,8 +143,11 @@ def test_prepare_dataset_streams_topology_and_features(tmp_path: Path, monkeypat
     _, dataset, runtime = prepare(tmp_path, monkeypatch)
     manifest = json.loads((dataset / "manifest.json").read_text())
 
-    assert manifest["schema_version"] == 2
-    assert set(manifest["tensors"]) == {"head", "tail", "relation_id", "split", "type_set_id"}
+    assert manifest["schema_version"] == 3
+    assert set(manifest["tensors"]) == {"head", "tail", "relation_id", "split", "type_set_id", "edge_type_id"}
+    edge_types = TensorRef.model_validate(manifest["tensors"]["edge_type_id"]).load(dataset)
+    train = TensorRef.model_validate(manifest["tensors"]["split"]).load(dataset) == 0
+    assert manifest["edge_type_count"] == 1 + int(edge_types[train].max())
     for name, reference in manifest["tensors"].items():
         assert reference["path"].endswith(".safetensors"), name
     assert not (dataset / "split-records.ndjson").exists()
@@ -195,6 +198,10 @@ def test_prepare_dataset_streams_topology_and_features(tmp_path: Path, monkeypat
     graph = manifest["batches"][0]["graph"]
     assert graph["edge_index"]["shape"][0] == 2
     assert graph["edge_index"]["path"].endswith(".safetensors")
+    batch_types = TensorRef.model_validate(graph["edge_type_id"]).load(dataset)
+    half = batch_types.size // 2
+    assert np.array_equal(batch_types[:half], batch_types[half:])
+    assert int(batch_types.max()) < manifest["edge_type_count"]
     assert graph["negative"]["subject"]["shape"][1] == runtime.split.negatives
 
 

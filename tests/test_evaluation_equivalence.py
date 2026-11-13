@@ -26,16 +26,18 @@ from support import write_table  # noqa: E402
 
 from ced.model.evaluation import _build_positives, _full_messages, _score_relation_batch, evaluate_dataset  # noqa: E402
 from ced.model.prepare import save_tensor  # noqa: E402
+from ced.model.shards import _edge_type_ids  # noqa: E402
 from ced.model.training import build_model  # noqa: E402
 
 
 def _assert_full_messages_match(seed: int, *, nodes: int = 40, edges: int = 240, relations: int = 3) -> None:
     graph = synthetic_graph(nodes=nodes, edges=edges, relations=relations, type_sets=3, seed=seed)
+    edge_types = _edge_type_ids(graph["edge_index"], graph["relation_id"], graph["split"], graph["type_set_id"])
     arguments = (
         torch.from_numpy(graph["edge_index"]),
         torch.from_numpy(graph["relation_id"]),
         torch.from_numpy(graph["split"].astype(np.int64)),
-        torch.from_numpy(graph["type_set_id"]),
+        torch.from_numpy(edge_types),
     )
     expected = full_messages_reference(*arguments)
     produced = _full_messages(*arguments)
@@ -71,10 +73,10 @@ def test_full_messages_match_on_random_graphs() -> None:
 def test_full_messages_rejects_missing_training_topology() -> None:
     edge_index = torch.tensor([[0], [1]])
     relations = torch.tensor([0])
-    types = torch.tensor([0, 0])
+    edge_types = torch.tensor([0])
     for implementation in (full_messages_reference, _full_messages):
         with pytest.raises(ValueError, match="at least one training statement"):
-            implementation(edge_index, relations, torch.tensor([2]), types)
+            implementation(edge_index, relations, torch.tensor([2]), edge_types)
 
 
 @pytest.mark.parametrize("ranking", ["exact", "sampled"])
@@ -122,17 +124,25 @@ def _multi_target_dataset(root: Path) -> None:
     )
     write_table(root / "relations.parquet", "id", ["p0", "p1"])
     write_table(root / "types.parquet", "categories", [["biolink:Gene"]])
+    edge_types = _edge_type_ids(
+        np.array([[0, 1, 2, 0, 3, 4, 1, 5, 2, 4], [1, 2, 3, 2, 4, 5, 0, 0, 4, 5]], dtype=np.int64),
+        np.array([0, 1, 0, 1, 0, 1, 1, 0, 1, 0], dtype=np.int64),
+        np.array([0, 0, 0, 0, 1, 1, 2, 2, 2, 2], dtype=np.int8),
+        np.zeros(6, dtype=np.int64),
+    )
     references = {
         "head": save_tensor(root, "head", np.array([0, 1, 2, 0, 3, 4, 1, 5, 2, 4], dtype=np.int64)),
         "tail": save_tensor(root, "tail", np.array([1, 2, 3, 2, 4, 5, 0, 0, 4, 5], dtype=np.int64)),
         "relation_id": save_tensor(root, "relation_id", np.array([0, 1, 0, 1, 0, 1, 1, 0, 1, 0], dtype=np.int64)),
         "split": save_tensor(root, "split", np.array([0, 0, 0, 0, 1, 1, 2, 2, 2, 2], dtype=np.int8)),
         "type_set_id": save_tensor(root, "type_set_id", np.zeros(6, dtype=np.int64)),
+        "edge_type_id": save_tensor(root, "edge_type_id", edge_types),
     }
     document = {
         "relations": 2,
         "entities": 6,
         "statements": statements,
+        "edge_type_count": 1 + int(edge_types.max()),
         "tensors": {name: reference.model_dump(mode="json") for name, reference in references.items()},
     }
     (root / "manifest.json").write_text(json.dumps(document))

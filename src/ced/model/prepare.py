@@ -14,7 +14,7 @@ from ced.kg.audit import validate_checksums
 from ced.model.feature_store import prepare_features
 from ced.model.pruning import prune_isolated_trees
 from ced.model.schemas import DatasetManifest, TensorRef, VocabularyArtifact
-from ced.model.shards import write_batch_shards
+from ced.model.shards import _edge_type_ids, write_batch_shards
 from ced.model.split import split_bounds
 from ced.model.tensors import write_tensor
 from ced.preflight import require_cpu_worker, require_disk
@@ -131,6 +131,9 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
             .column("type_set_id")
             .to_numpy(zero_copy_only=False),
         }
+        arrays["edge_type_id"] = _edge_type_ids(
+            np.stack((arrays["head"], arrays["tail"])), arrays["relation_id"], arrays["split"], arrays["type_set_id"]
+        )
         tensors = {name: save_tensor(root, name, values) for name, values in arrays.items()}
         relation_count = connection.execute("SELECT count(*) FROM relations").fetchone()
         assert relation_count is not None
@@ -158,6 +161,7 @@ def prepare_dataset(runtime: RuntimeConfig, snapshot: str) -> Path:
             entities=entity_count,
             relations=relation_count[0],
             statements=total,
+            edge_type_count=1 + int(arrays["edge_type_id"].max()) if total else 0,
             tensors=tensors,
             batches=examples,
             feature_fields=fields,

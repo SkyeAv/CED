@@ -303,7 +303,7 @@ class PublicationFeatureStore(ConfigBase):
 
 
 class DatasetManifest(ConfigBase):
-    schema_version: int = 2
+    schema_version: int = 3
     dataset_id: str
     snapshot_id: str
     seed: int
@@ -311,6 +311,7 @@ class DatasetManifest(ConfigBase):
     entities: int = Field(gt=0)
     relations: int = Field(gt=0)
     statements: int = Field(ge=0)
+    edge_type_count: int = Field(ge=0)
     tensors: dict[str, TensorRef]
     feature_fields: list[FeatureFieldSpec] = Field(default_factory=list)
     features: FeatureStoreArtifact = Field(default_factory=FeatureStoreArtifact)
@@ -330,7 +331,10 @@ class DatasetManifest(ConfigBase):
             "relation_id": [self.statements],
             "split": [self.statements],
             "type_set_id": [self.entities],
+            "edge_type_id": [self.statements],
         }
+        if self.statements and self.edge_type_count < 1:
+            raise ValueError("edge type count must be positive when statements exist")
         for key, shape in expected.items():
             if key not in self.tensors or self.tensors[key].shape != shape:
                 raise ValueError(f"unaligned topology tensor: {key}")

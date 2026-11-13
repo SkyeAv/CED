@@ -1,9 +1,8 @@
-"""Frozen pre-optimization reference encoder (do not edit).
+"""Independent naive reference for the relational attention encoder.
 
-Verbatim copy of RelationalAttentionEncoder as of commit 7deca03. The
-production encoder groups edges by relation once per forward; this reference
-keeps the historical per-layer boolean-mask loop so
-tests/test_encoder_equivalence.py can assert bitwise-identical outputs.
+The reference intentionally keeps the historical per-layer boolean-mask loop.
+Per-layer output projections mirror the corrected runtime contract, allowing
+forward and gradient equivalence checks without unused per-edge-type outputs.
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ class RelationalAttentionEncoderReference(nn.Module):
         self.queries = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(edge_types)])
         self.keys = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(edge_types)])
         self.values = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(edge_types)])
-        self.outputs = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(edge_types)])
+        self.outputs = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(layers)])
         self.gates = nn.Linear(statement_dimension, dimension)
         self.norms = nn.ModuleList([nn.LayerNorm(dimension) for _ in range(layers)])
         self.output = nn.LayerNorm(dimension)

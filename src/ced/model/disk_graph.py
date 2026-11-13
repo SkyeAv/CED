@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from ced.model.batches import SampledNeighborhood
+from ced.model.negatives import choose_candidates
 
 
 class DiskGraph:
@@ -60,39 +61,68 @@ class DiskGraph:
     def negatives(
         self, triples: list[tuple[int, int, int]], count: int, seed: int
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        if count < 0:
+            raise ValueError("negative count must be nonnegative")
         heads = np.zeros((len(triples), count), dtype=np.int64)
         tails = np.zeros_like(heads)
         valid = np.zeros_like(heads, dtype=np.bool_)
         random = np.random.default_rng(seed)
         for row, (h, r, t) in enumerate(triples):
             heads[row, :], tails[row, :] = h, t
-            for column in range(count):
-                side = column % 2
+            for side in (0, 1):
+                columns = np.arange(side, count, 2)
                 size = self.connection.execute("SELECT n FROM pool_counts WHERE r=? AND side=?", (r, side)).fetchone()
                 if not size or not size[0]:
                     continue
-                offset = int(random.integers(size[0]))
-                candidate = self.connection.execute(
-                    "SELECT id FROM pools WHERE r=? AND side=? ORDER BY id LIMIT 1 OFFSET ?", (r, side, offset)
-                ).fetchone()
-                assert candidate is not None
-                pivot = candidate[0]
-                # Two indexed ranges wrap around; NOT EXISTS filters every known positive.
-                for comparison, boundary in ((">=", pivot), ("<", pivot)):
-                    query = (
-                        "SELECT p.id FROM pools p WHERE p.r=? AND p.side=? AND p.id "
-                        + comparison
-                        + " ? AND NOT EXISTS (SELECT 1 FROM positives k WHERE k.r=? AND k.h="
-                        + ("p.id" if side == 0 else "?")
-                        + " AND k.t="
-                        + ("?" if side == 0 else "p.id")
-                        + ") ORDER BY p.id LIMIT 1"
+                query = (
+                    "SELECT p.id FROM pools p WHERE p.r=? AND p.side=? "
+                    "AND NOT EXISTS (SELECT 1 FROM positives k WHERE k.r=? AND k.h="
+                    + ("p.id" if side == 0 else "?")
+                    + " AND k.t="
+                    + ("?" if side == 0 else "p.id")
+                    + ") ORDER BY p.id"
+                )
+
+                def exhaustive(query: str = query, r: int = r, side: int = side, h: int = h, t: int = t) -> np.ndarray:
+                    return np.fromiter(
+                        (
+                            candidate
+                            for (candidate,) in self.connection.execute(query, (r, side, r, t if side == 0 else h))
+                        ),
+                        dtype=np.int64,
                     )
-                    found = self.connection.execute(query, (r, side, boundary, r, t if side == 0 else h)).fetchone()
-                    if found:
-                        heads[row, column], tails[row, column] = (found[0], t) if side == 0 else (h, found[0])
-                        valid[row, column] = True
-                        break
+
+                def lookup(indices: np.ndarray, r: int = r, side: int = side) -> np.ndarray:
+                    values = []
+                    for index in indices:
+                        result = self.connection.execute(
+                            "SELECT id FROM pools WHERE r=? AND side=? ORDER BY id LIMIT 1 OFFSET ?",
+                            (r, side, int(index)),
+                        ).fetchone()
+                        assert result is not None
+                        values.append(result[0])
+                    return np.asarray(values, dtype=np.int64)
+
+                def eligible(
+                    candidates: np.ndarray, h: int = h, r: int = r, side: int = side, t: int = t
+                ) -> np.ndarray:
+                    return np.asarray(
+                        [
+                            candidate
+                            for candidate in candidates
+                            if self.connection.execute(
+                                "SELECT 1 FROM positives WHERE h=? AND r=? AND t=?",
+                                (int(candidate), r, t) if side == 0 else (h, r, int(candidate)),
+                            ).fetchone()
+                            is None
+                        ],
+                        dtype=np.int64,
+                    )
+
+                chosen = choose_candidates(int(size[0]), len(columns), random, lookup, eligible, exhaustive)
+                for column, candidate in zip(columns, chosen, strict=False):
+                    heads[row, column], tails[row, column] = (candidate, t) if side == 0 else (h, candidate)
+                    valid[row, column] = True
         return heads, tails, valid
 
     def neighborhood(
