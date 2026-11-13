@@ -184,11 +184,35 @@ def _subsample(
     edge_type_id: torch.Tensor,
     statement_id: torch.Tensor,
     reduction: int,
+    supervision: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Deterministically thin message-passing edges under CUDA memory pressure.
+
+    Supervision statements always survive the modulo keep mask: the decoder
+    scores them from their endpoints' states, so dropping them would turn the
+    retry into a batch with no learnable signal. ``reduction <= 1`` is an
+    identity transform.
+    """
     if reduction <= 1:
         return edge_index, relation_id, edge_type_id, statement_id
     keep = torch.arange(edge_index.shape[1], device=edge_index.device) % reduction == 0
+    keep |= torch.isin(statement_id, supervision)
     return edge_index[:, keep], relation_id[keep], edge_type_id[keep], statement_id[keep]
+
+
+def _supervision_mask(positive: torch.Tensor, unique_statements: torch.Tensor) -> torch.Tensor:
+    """Boolean mask of supervision positives present in the sampled statement set.
+
+    Shard-time injection plus the shard-writer guard make an empty survivor set
+    data corruption: the batch would otherwise silently contribute zero loss and
+    training would look healthy while supervision vanished. Raise instead of
+    returning an all-false mask so the failure surfaces at the corrupt batch.
+    The same mask selects the aligned negative rows.
+    """
+    selected = torch.isin(positive, unique_statements)
+    if not bool(selected.any()):
+        raise ValueError("training batch lost all supervision statements")
+    return selected
 
 
 def _owner_states(
@@ -270,12 +294,10 @@ def train_step(
     positive = _load(graph.positive_statement_id, root, device)
     global_nodes = _load(graph.global_node_id, root, device)
     edge_index, relation_id, edge_type_id, statement_id = _subsample(
-        edge_index, relation_id, edge_type_id, statement_id, memory_reduction
+        edge_index, relation_id, edge_type_id, statement_id, memory_reduction, supervision=positive
     )
     unique_statements = torch.unique(statement_id)
-    selected = torch.isin(positive, unique_statements)
-    if not bool(selected.any()):
-        return 0.0
+    selected = _supervision_mask(positive, unique_statements)
     positive = positive[selected]
     positions = torch.searchsorted(unique_statements, positive)
     heads = edge_index[0, positions]
@@ -384,6 +406,7 @@ def train_batches(
     metrics: dict[str, float] = {"loss": 0.0, "batches": 0.0}
     total = 0.0
     trained = 0
+    reductions = 0
     start_epoch = 0
     start_cursor = 0
     if checkpoint_path is not None and checkpoint_path.is_file():
@@ -411,7 +434,7 @@ def train_batches(
     stop = False
 
     def run_indices(indices: Sequence[int]) -> None:
-        nonlocal consumed, current_cursor, stop, total, trained
+        nonlocal consumed, current_cursor, stop, total, trained, reductions
         for index in indices:
             if max_batches is not None and consumed >= max_batches:
                 stop = True
@@ -445,6 +468,10 @@ def train_batches(
                     reduction *= 2
             total += loss
             trained += 1
+            if reduction > 1:
+                # CUDA OOM truncation is invisible in the loss; count the batches
+                # that trained on a thinned graph so runs remain comparable.
+                reductions += 1
 
     if selected_indices is not None:
         run_indices(list(selected_indices)[start_cursor:])
@@ -462,6 +489,7 @@ def train_batches(
         "epoch": float(current_epoch),
         "cursor": float(current_cursor),
         "consumed": float(consumed),
+        "reductions": float(reductions),
     }
     if checkpoint_path is not None:
         _save_checkpoint(

@@ -50,6 +50,19 @@ def _positive_triples(
     )
 
 
+def missing_supervision(positive: np.ndarray, statement_id: np.ndarray) -> np.ndarray:
+    """Return supervision statement ids absent from a batch's message-passing set.
+
+    Neighborhood injection guarantees every train supervision statement survives
+    sampling, so any absence is data corruption rather than a routine event; the
+    shard writer raises on it instead of writing a batch that would silently train
+    on nothing.
+    """
+    if positive.size == 0:
+        return np.empty(0, dtype=np.int64)
+    return positive[~np.isin(positive, statement_id)]
+
+
 def write_batch_shards(
     root: Path, arrays: Mapping[str, np.ndarray], runtime: RuntimeConfig, *, in_memory: bool = True
 ) -> list[TrainingExample]:
@@ -91,6 +104,9 @@ def write_batch_shards(
                     triples, count=runtime.split.negatives, seed=runtime.split.seed + start + split_id
                 )
             seeds = np.unique(np.concatenate((edges[:, positive].ravel(), head[valid], tail[valid])))
+            # Message passing stays train-only: held-out positives are supervision for
+            # evaluation, never injected statements.
+            required = positive[splits[positive] == 0]
             if in_memory:
                 assert adjacency is not None
                 neighborhood = sample_neighborhood(
@@ -103,6 +119,7 @@ def write_batch_shards(
                     node_limit=runtime.batch.node_limit,
                     edge_types=edge_types,
                     adjacency=adjacency,
+                    required=required,
                 )
             else:
                 assert disk is not None
@@ -114,7 +131,12 @@ def write_batch_shards(
                     seed=runtime.split.seed + start,
                     node_limit=runtime.batch.node_limit,
                     edge_types=edge_types,
+                    required=required,
                 )
+            if label == "train":
+                absent = missing_supervision(positive, neighborhood.statement_id)
+                if absent.size:
+                    raise ValueError(f"train batch {label}-{start:09d} lost supervision statements: {absent.tolist()}")
             directory = root / "batches" / f"{label}-{start:09d}"
             directory.mkdir(parents=True)
 
