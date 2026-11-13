@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from ced.model.batches import sample_neighborhood
 from ced.model.disk_graph import DiskGraph
@@ -149,6 +150,19 @@ def test_missing_supervision_helper() -> None:
     ).tolist() == [2]
     assert missing_supervision(np.array([0, 1], dtype=np.int64), np.array([0, 1, 0, 1], dtype=np.int64)).size == 0
     assert missing_supervision(np.array([], dtype=np.int64), np.array([0], dtype=np.int64)).size == 0
+
+
+def test_positive_selection_raises_when_empty() -> None:
+    # After shard-time injection an empty survivor set is corruption, not a skip:
+    # selection must keep the intersecting positives and raise when none survive.
+    from ced.model.training import _supervision_mask
+
+    with pytest.raises(ValueError, match="lost all supervision"):
+        _supervision_mask(torch.tensor([5, 6], dtype=torch.int64), torch.tensor([1, 2, 3], dtype=torch.int64))
+    with pytest.raises(ValueError, match="lost all supervision"):
+        _supervision_mask(torch.empty(0, dtype=torch.int64), torch.tensor([1, 2, 3], dtype=torch.int64))
+    mask = _supervision_mask(torch.tensor([1, 6, 2], dtype=torch.int64), torch.tensor([1, 2, 3], dtype=torch.int64))
+    assert mask.tolist() == [True, False, True]
 
 
 def test_shard_writer_raises_when_supervision_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

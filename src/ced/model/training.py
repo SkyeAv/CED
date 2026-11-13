@@ -191,6 +191,21 @@ def _subsample(
     return edge_index[:, keep], relation_id[keep], edge_type_id[keep], statement_id[keep]
 
 
+def _supervision_mask(positive: torch.Tensor, unique_statements: torch.Tensor) -> torch.Tensor:
+    """Boolean mask of supervision positives present in the sampled statement set.
+
+    Shard-time injection plus the shard-writer guard make an empty survivor set
+    data corruption: the batch would otherwise silently contribute zero loss and
+    training would look healthy while supervision vanished. Raise instead of
+    returning an all-false mask so the failure surfaces at the corrupt batch.
+    The same mask selects the aligned negative rows.
+    """
+    selected = torch.isin(positive, unique_statements)
+    if not bool(selected.any()):
+        raise ValueError("training batch lost all supervision statements")
+    return selected
+
+
 def _owner_states(
     state: torch.Tensor, mapping_ids: torch.Tensor, owner_rows: torch.Tensor, rows: torch.Tensor
 ) -> torch.Tensor:
@@ -273,9 +288,7 @@ def train_step(
         edge_index, relation_id, edge_type_id, statement_id, memory_reduction
     )
     unique_statements = torch.unique(statement_id)
-    selected = torch.isin(positive, unique_statements)
-    if not bool(selected.any()):
-        return 0.0
+    selected = _supervision_mask(positive, unique_statements)
     positive = positive[selected]
     positions = torch.searchsorted(unique_statements, positive)
     heads = edge_index[0, positions]
