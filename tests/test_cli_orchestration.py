@@ -95,6 +95,79 @@ def test_cli_subcommands_delegate_exact_arguments(monkeypatch: pytest.MonkeyPatc
     ]
 
 
+def test_upload_flags_and_retry_delegate_exact_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: list[list[str]] = []
+    monkeypatch.setattr("ced.remote.RemoteExecutor.run", lambda self, arguments: recorded.append(list(arguments)))
+    monkeypatch.setattr(cli, "is_remote_worker", lambda: False)
+
+    cli.build(upload=False)
+    cli.prepare("snapshot-1", upload=False)
+    cli.encode_text("dataset-1", upload=False)
+    cli.publish(snapshot="snapshot-1", dataset="dataset-1")
+
+    assert recorded == [
+        ["build", "--no-upload"],
+        ["prepare", "snapshot-1", "--no-upload"],
+        ["encode-text", "dataset-1", "--no-upload"],
+        ["publish", "--snapshot", "snapshot-1", "--dataset", "dataset-1"],
+    ]
+
+
+def test_remote_workflow_publishes_after_each_producer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
+    config = runtime(tmp_path)
+    snapshot = config.artifact_path("snapshots", "snapshot")
+    dataset = config.artifact_path("datasets", "dataset")
+    monkeypatch.setattr(cli, "is_remote_worker", lambda: True)
+    monkeypatch.setattr(cli, "load_runtime", lambda: config)
+
+    def built(*args: Any, **kwargs: Any) -> Path:
+        events.append("build")
+        return snapshot
+
+    monkeypatch.setattr("ced.kg.pipeline.build_graph", built)
+    monkeypatch.setattr("ced.model.prepare.prepare_dataset", lambda runtime, name: events.append("prepare") or dataset)
+    monkeypatch.setattr(
+        "ced.model.encoding.encode_dataset_text", lambda runtime, name, **kwargs: events.append("encode")
+    )
+    monkeypatch.setattr("ced.publication.publish_snapshot", lambda runtime, path: events.append(f"graph:{path.name}"))
+    monkeypatch.setattr("ced.publication.publish_dataset", lambda runtime, path: events.append(f"encoded:{path.name}"))
+
+    cli.build()
+    cli.prepare("snapshot")
+    cli.encode_text("dataset")
+    cli.publish(snapshot="snapshot", dataset="dataset")
+    assert events == [
+        "build",
+        "graph:snapshot",
+        "prepare",
+        "encoded:dataset",
+        "encode",
+        "encoded:dataset",
+        "graph:snapshot",
+        "encoded:dataset",
+    ]
+
+
+def test_remote_workflow_can_skip_uploads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
+    config = runtime(tmp_path)
+    monkeypatch.setattr(cli, "is_remote_worker", lambda: True)
+    monkeypatch.setattr(cli, "load_runtime", lambda: config)
+    monkeypatch.setattr("ced.kg.pipeline.build_graph", lambda *args, **kwargs: events.append("build") or Path("graph"))
+    monkeypatch.setattr("ced.model.prepare.prepare_dataset", lambda *args: events.append("prepare") or Path("dataset"))
+    monkeypatch.setattr("ced.model.encoding.encode_dataset_text", lambda *args, **kwargs: events.append("encode"))
+    monkeypatch.setattr("ced.publication.publish_snapshot", lambda *args: events.append("unexpected-graph-upload"))
+    monkeypatch.setattr("ced.publication.publish_dataset", lambda *args: events.append("unexpected-encoded-upload"))
+
+    cli.build(upload=False)
+    cli.prepare("snapshot", upload=False)
+    cli.encode_text("dataset", upload=False)
+    with pytest.raises(ValueError, match="select a snapshot or dataset"):
+        cli.publish()
+    assert events == ["build", "prepare", "encode"]
+
+
 def test_remote_worker_executes_quality_gate_in_process(monkeypatch: pytest.MonkeyPatch) -> None:
     """As a remote worker, `ced check` must call the gate directly instead of ssh-ing
     back into the machine it is already running on."""

@@ -129,6 +129,7 @@ def test_cli_forwards_group_selection(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("ced.acquisition.pipeline.fetch_sources", fake_fetch_sources)
     monkeypatch.setattr("ced.kg.pipeline.build_graph", fake_build_graph)
+    monkeypatch.setattr("ced.publication.publish_snapshot", lambda runtime, root: None)
     cli.fetch(source=None, group=["translator"], all_enabled=False, yes=True)
     cli.build(source=None, group=["translator"], fullmap_path=None)
     assert recorded["fetch"] == ([], ["translator"], False)

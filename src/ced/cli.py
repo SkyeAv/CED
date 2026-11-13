@@ -110,30 +110,45 @@ def fetch(
 
 
 @app.command
-def build(source: list[str] | None = None, group: list[str] | None = None, fullmap_path: Path | None = None) -> None:
+def build(
+    source: list[str] | None = None,
+    group: list[str] | None = None,
+    fullmap_path: Path | None = None,
+    upload: bool = True,
+) -> None:
     """Build and merge selected source graphs without implicit downloads."""
     arguments = [
         "build",
         *_many("--source", source),
         *_many("--group", group),
         *_many("--fullmap-path", [str(fullmap_path)] if fullmap_path else []),
+        *(["--no-upload"] if not upload else []),
     ]
 
     def action() -> None:
         from ced.kg.pipeline import build_graph
+        from ced.publication import publish_snapshot
 
-        build_graph(load_runtime(), source or [], groups=group, fullmap_path=fullmap_path)
+        runtime = load_runtime()
+        snapshot = build_graph(runtime, source or [], groups=group, fullmap_path=fullmap_path)
+        if upload:
+            publish_snapshot(runtime, snapshot)
 
     _remote_or_run(arguments, action)
 
 
 @app.command
-def prepare(snapshot: str) -> None:
+def prepare(snapshot: str, upload: bool = True) -> None:
     """Prepare split and tensor shards on wenceslaus."""
-    arguments = ["prepare", snapshot]
+    arguments = ["prepare", snapshot, *(["--no-upload"] if not upload else [])]
 
     def action() -> None:
-        import_module("ced.model.prepare").prepare_dataset(load_runtime(), snapshot)
+        from ced.publication import publish_dataset
+
+        runtime = load_runtime()
+        dataset = import_module("ced.model.prepare").prepare_dataset(runtime, snapshot)
+        if upload:
+            publish_dataset(runtime, dataset)
 
     _remote_or_run(arguments, action)
 
@@ -147,6 +162,7 @@ def encode_text(
     dimension: int | None = None,
     gpu: str | None = None,
     yes: bool = False,
+    upload: bool = True,
 ) -> None:
     """Encode node names, qualifiers, and long attributes with the configured backend."""
     arguments = [
@@ -158,6 +174,7 @@ def encode_text(
         *(["--dimension", str(dimension)] if dimension else []),
         *(["--gpu", gpu] if gpu else []),
         *(["--yes"] if yes else []),
+        *(["--no-upload"] if not upload else []),
     ]
 
     def action() -> None:
@@ -186,6 +203,10 @@ def encode_text(
         if updates or gpu:
             runtime.text_encoding = TextEncodingSettings.model_validate(document)
         import_module("ced.model.encoding").encode_dataset_text(runtime, dataset, assume_yes=yes)
+        if upload:
+            from ced.publication import publish_dataset
+
+            publish_dataset(runtime, runtime.artifact_path("datasets", dataset))
 
     _remote_or_run(arguments, action)
 
@@ -228,6 +249,29 @@ def encode_attributes(
         if updates:
             runtime.text_encoding = TextEncodingSettings.model_validate(runtime.text_encoding.model_dump() | updates)
         import_module("ced.model.statement_encoding").encode_statement_attributes(runtime, dataset)
+
+    _remote_or_run(arguments, action)
+
+
+@app.command
+def publish(snapshot: str | None = None, dataset: str | None = None) -> None:
+    """Retry publication of a completed graph snapshot or encoded dataset."""
+    arguments = [
+        "publish",
+        *_many("--snapshot", [snapshot] if snapshot else []),
+        *_many("--dataset", [dataset] if dataset else []),
+    ]
+
+    def action() -> None:
+        if not snapshot and not dataset:
+            raise ValueError("select a snapshot or dataset to publish")
+        from ced.publication import publish_dataset, publish_snapshot
+
+        runtime = load_runtime()
+        if snapshot:
+            publish_snapshot(runtime, runtime.artifact_path("snapshots", snapshot))
+        if dataset:
+            publish_dataset(runtime, runtime.artifact_path("datasets", dataset))
 
     _remote_or_run(arguments, action)
 

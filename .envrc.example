@@ -19,3 +19,5 @@ export PYTHONUTF8=1
 # Set Modal credentials only in the untracked wenceslaus .envrc or environment.
 #export MODAL_TOKEN_ID=
 #export MODAL_TOKEN_SECRET=
+# Set the Hugging Face write token only in the untracked wenceslaus .envrc or environment.
+#export HF_TOKEN=
