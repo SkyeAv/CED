@@ -75,8 +75,10 @@ def _sampled_selection(
     rng: np.random.Generator,
     count: int,
 ) -> np.ndarray:
-    """Select ranked candidates without changing the historical RNG stream."""
-    pool = np.array([], dtype=np.int64) if candidates is None else candidates
+    """Select from a nonempty declared pool, retaining the held-out target."""
+    if candidates is None or candidates.size == 0:
+        raise ValueError("ranking candidate pool must not be empty")
+    pool = candidates
     if pool.size > count:
         pool = rng.choice(pool, size=count, replace=False)
     chosen = np.union1d(pool, np.array([target], dtype=np.int64))
@@ -160,12 +162,8 @@ def evaluate_dataset(
     document = json.loads((root / "manifest.json").read_text())
     references = {name: TensorRef.model_validate(item) for name, item in document["tensors"].items()}
     arrays = {name: reference.load(root) for name, reference in references.items()}
-    pools: TypedPools | None = (
-        typed_pools(
-            np.stack((arrays["head"], arrays["tail"])), arrays["relation_id"], arrays["split"], arrays["type_set_id"]
-        )
-        if ranking == "sampled"
-        else None
+    pools: TypedPools = typed_pools(
+        np.stack((arrays["head"], arrays["tail"])), arrays["relation_id"], arrays["split"], arrays["type_set_id"]
     )
 
     def tensor(name: str) -> torch.Tensor:
@@ -209,28 +207,30 @@ def evaluate_dataset(
     relation_list = relations[targets].tolist()
     tail_list = edge_index[1, targets].tolist()
     target_rows = list(zip(head_list, relation_list, tail_list, strict=True))
-    selections: list[tuple[np.ndarray, np.ndarray]] | None = None
-    if ranking == "sampled":
-        assert pools is not None
-        selections = [
-            (
-                _sampled_selection(
-                    tail,
-                    positives.get((head, relation), set()),
-                    pools.objects.get(relation),
-                    random,
-                    sampled_candidates,
-                ),
-                _sampled_selection(
-                    head,
-                    positives.get((tail, relation), set()),
-                    pools.subjects.get(relation),
-                    random,
-                    sampled_candidates,
-                ),
-            )
-            for head, relation, tail in target_rows
-        ]
+    for relation in set(relation_list):
+        for side, candidates in (("subject", pools.subjects.get(relation)), ("object", pools.objects.get(relation))):
+            if candidates is None or candidates.size == 0:
+                raise ValueError(f"relation {relation} has no {side} ranking candidates")
+    candidate_count = sampled_candidates if ranking == "sampled" else int(document["entities"])
+    selections = [
+        (
+            _sampled_selection(
+                tail,
+                positives.get((head, relation), set()),
+                pools.objects.get(relation),
+                random,
+                candidate_count,
+            ),
+            _sampled_selection(
+                head,
+                positives.get((tail, relation), set()),
+                pools.subjects.get(relation),
+                random,
+                candidate_count,
+            ),
+        )
+        for head, relation, tail in target_rows
+    ]
     relation_positions: dict[int, list[int]] = {}
     for position, relation in enumerate(relation_list):
         relation_positions.setdefault(relation, []).append(position)
@@ -248,13 +248,9 @@ def evaluate_dataset(
                 )
                 for row, position in enumerate(batch_positions):
                     head, _, tail = target_rows[position]
-                    if selections is None:
-                        tail_rank = filtered_rank(tail_scores[row], tail, positives.get((head, relation), set()))
-                        head_rank = filtered_rank(head_scores[row], head, positives.get((tail, relation), set()))
-                    else:
-                        tail_selection, head_selection = selections[position]
-                        tail_rank = _selection_rank(tail_scores[row], tail, tail_selection)
-                        head_rank = _selection_rank(head_scores[row], head, head_selection)
+                    tail_selection, head_selection = selections[position]
+                    tail_rank = _selection_rank(tail_scores[row], tail, tail_selection)
+                    head_rank = _selection_rank(head_scores[row], head, head_selection)
                     rank_pairs[position] = (tail_rank, head_rank)
     # Restore statement order before aggregating so floating-point reduction
     # order, group insertion order, and the final report match the reference.

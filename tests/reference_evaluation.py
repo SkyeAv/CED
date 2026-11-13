@@ -55,7 +55,9 @@ def sampled_rank(
     rng: np.random.Generator,
     count: int,
 ) -> int:
-    pool = np.array([], dtype=np.int64) if candidates is None else candidates
+    if candidates is None or candidates.size == 0:
+        raise ValueError("ranking candidate pool must not be empty")
+    pool = candidates
     if pool.size > count:
         pool = rng.choice(pool, size=count, replace=False)
     chosen = np.union1d(pool, np.array([target], dtype=np.int64))
@@ -90,12 +92,8 @@ def evaluate_dataset_reference(
     document = json.loads((root / "manifest.json").read_text())
     references = {name: TensorRef.model_validate(item) for name, item in document["tensors"].items()}
     arrays = {name: reference.load(root) for name, reference in references.items()}
-    pools: TypedPools | None = (
-        typed_pools(
-            np.stack((arrays["head"], arrays["tail"])), arrays["relation_id"], arrays["split"], arrays["type_set_id"]
-        )
-        if ranking == "sampled"
-        else None
+    pools: TypedPools = typed_pools(
+        np.stack((arrays["head"], arrays["tail"])), arrays["relation_id"], arrays["split"], arrays["type_set_id"]
     )
 
     def tensor(name: str) -> torch.Tensor:
@@ -136,33 +134,29 @@ def evaluate_dataset_reference(
     ranks: list[int] = []
     groups: dict[str, list[int]] = {}
     random = np.random.default_rng(seed)
+    candidate_count = sampled_candidates if ranking == "sampled" else int(document["entities"])
     with torch.no_grad():
         for target in targets.tolist():
             head, relation, tail = int(edge_index[0, target]), int(relations[target]), int(edge_index[1, target])
             relation_tensor = torch.full((state.shape[0],), relation, dtype=torch.long, device=resolved)
             tail_scores = model.decoder.score(state[head].expand_as(state), relation_tensor, state)
             head_scores = model.decoder.score(state, relation_tensor, state[tail].expand_as(state))
-            if ranking == "sampled":
-                assert pools is not None
-                tail_rank = sampled_rank(
-                    tail_scores,
-                    tail,
-                    positives.get((head, relation), set()),
-                    pools.objects.get(relation),
-                    random,
-                    sampled_candidates,
-                )
-                head_rank = sampled_rank(
-                    head_scores,
-                    head,
-                    positives.get((tail, relation), set()),
-                    pools.subjects.get(relation),
-                    random,
-                    sampled_candidates,
-                )
-            else:
-                tail_rank = filtered_rank(tail_scores, tail, positives.get((head, relation), set()))
-                head_rank = filtered_rank(head_scores, head, positives.get((tail, relation), set()))
+            tail_rank = sampled_rank(
+                tail_scores,
+                tail,
+                positives.get((head, relation), set()),
+                pools.objects.get(relation),
+                random,
+                candidate_count,
+            )
+            head_rank = sampled_rank(
+                head_scores,
+                head,
+                positives.get((tail, relation), set()),
+                pools.subjects.get(relation),
+                random,
+                candidate_count,
+            )
             for rank, predicate_id, endpoint in zip(
                 (tail_rank, head_rank), (relation, relation), (tail, head), strict=True
             ):
