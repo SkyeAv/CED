@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, model_validator
 
 from ced.config.loader import _expand_env, read_yaml
-from ced.config.models import ConfigBase
+from ced.config.models import ConfigBase, RetryPolicy
 
 
 class ArtifactSpec(ConfigBase):
@@ -56,26 +56,24 @@ class ArtifactInventorySpec(ConfigBase):
         return artifacts
 
 
-class HuggingFaceAcquisition(ConfigBase):
+class HuggingFaceAcquisition(RetryPolicy):
     backend: Literal["huggingface"]
     repo_id: str
     revision: str = Field(min_length=40, max_length=40)
     fast_transfer: bool = True
 
 
-class Aria2Acquisition(ConfigBase):
+class Aria2Acquisition(RetryPolicy):
     backend: Literal["aria2"]
     connections: int | None = Field(default=None, ge=1, le=32)
     headers: dict[str, str] = Field(default_factory=dict)
 
 
-class HttpAcquisition(ConfigBase):
+class HttpAcquisition(RetryPolicy):
     backend: Literal["http"]
     connections: int | None = Field(default=None, ge=1, le=32)
     headers: dict[str, str] = Field(default_factory=dict)
     segment_bytes: int | None = Field(default=None, ge=1024, le=1024**3)
-    max_tries: int = Field(default=5, ge=1, le=10)
-    retry_wait_seconds: float = Field(default=5, gt=0, le=300)
 
 
 class LocalAcquisition(ConfigBase):

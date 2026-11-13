@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,7 @@ from typing import Any
 import yaml
 from huggingface_hub import HfApi
 
+from ced.acquisition.retry import is_transient_huggingface, retry_transient
 from ced.config.models import RuntimeConfig
 from ced.kg.audit import validate_checksums
 from ced.model.schemas import DenseFeatureStore
@@ -157,21 +159,36 @@ def dataset_card(runtime: RuntimeConfig, files: set[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _retry[T](runtime: RuntimeConfig, label: str, action: Callable[[], T]) -> T:
+    """Run one Hub API call with the shared download retry budget; uploads ride out host outages too."""
+    return retry_transient(
+        action,
+        attempts=runtime.download_retries,
+        base_wait=runtime.download_retry_wait_seconds,
+        label=label,
+        transient=is_transient_huggingface,
+    )
+
+
 def _client(runtime: RuntimeConfig) -> HfApi:
     require_cpu_worker(runtime)
     api = HfApi()
-    api.create_repo(REPO_ID, repo_type="dataset", exist_ok=True)
+    _retry(runtime, f"create repo {REPO_ID}", lambda: api.create_repo(REPO_ID, repo_type="dataset", exist_ok=True))
     return api
 
 
 def _card(api: HfApi, runtime: RuntimeConfig, message: str) -> None:
-    files = set(api.list_repo_files(REPO_ID, repo_type="dataset"))
-    api.upload_file(
-        path_or_fileobj=dataset_card(runtime, files).encode(),
-        path_in_repo="README.md",
-        repo_id=REPO_ID,
-        repo_type="dataset",
-        commit_message=message,
+    files = set(_retry(runtime, "list repo files", lambda: api.list_repo_files(REPO_ID, repo_type="dataset")))
+    _retry(
+        runtime,
+        "upload dataset card",
+        lambda: api.upload_file(
+            path_or_fileobj=dataset_card(runtime, files).encode(),
+            path_in_repo="README.md",
+            repo_id=REPO_ID,
+            repo_type="dataset",
+            commit_message=message,
+        ),
     )
 
 
@@ -185,20 +202,28 @@ def publish_snapshot(runtime: RuntimeConfig, root: Path) -> None:
     }
     validate_checksums(root, published_checksums)
     api = _client(runtime)
-    api.upload_folder(
-        folder_path=root,
-        path_in_repo=f"graph/{root.name}",
-        repo_id=REPO_ID,
-        repo_type="dataset",
-        allow_patterns=list(published_checksums),
-        commit_message=f"Publish graph snapshot {root.name}",
+    _retry(
+        runtime,
+        f"upload graph snapshot {root.name}",
+        lambda: api.upload_folder(
+            folder_path=root,
+            path_in_repo=f"graph/{root.name}",
+            repo_id=REPO_ID,
+            repo_type="dataset",
+            allow_patterns=list(published_checksums),
+            commit_message=f"Publish graph snapshot {root.name}",
+        ),
     )
-    api.upload_file(
-        path_or_fileobj=json.dumps(published_checksums, indent=2, sort_keys=True).encode(),
-        path_in_repo=f"graph/{root.name}/checksums.json",
-        repo_id=REPO_ID,
-        repo_type="dataset",
-        commit_message=f"Publish portable checksums for graph {root.name}",
+    _retry(
+        runtime,
+        f"upload checksums for graph {root.name}",
+        lambda: api.upload_file(
+            path_or_fileobj=json.dumps(published_checksums, indent=2, sort_keys=True).encode(),
+            path_in_repo=f"graph/{root.name}/checksums.json",
+            repo_id=REPO_ID,
+            repo_type="dataset",
+            commit_message=f"Publish portable checksums for graph {root.name}",
+        ),
     )
     _card(api, runtime, f"Update dataset card for graph {root.name}")
 
@@ -231,22 +256,30 @@ def publish_dataset(runtime: RuntimeConfig, root: Path) -> None:
         _validate_store(root, store)
     api = _client(runtime)
     destination = f"encoded/{root.name}"
-    api.upload_folder(
-        folder_path=root,
-        path_in_repo=destination,
-        repo_id=REPO_ID,
-        repo_type="dataset",
-        allow_patterns=["manifest.json", *manifest["checksums"]],
-        commit_message=f"Publish encoded dataset {root.name}",
+    _retry(
+        runtime,
+        f"upload encoded dataset {root.name}",
+        lambda: api.upload_folder(
+            folder_path=root,
+            path_in_repo=destination,
+            repo_id=REPO_ID,
+            repo_type="dataset",
+            allow_patterns=["manifest.json", *manifest["checksums"]],
+            commit_message=f"Publish encoded dataset {root.name}",
+        ),
     )
     for store in stores:
         payload = (root / "text-features.json").read_bytes()
         for path in ("text-features.json", f"text-{store.encoder_key}.json"):
-            api.upload_file(
-                path_or_fileobj=payload,
-                path_in_repo=f"{destination}/{path}",
-                repo_id=REPO_ID,
-                repo_type="dataset",
-                commit_message=f"Publish portable text manifest {store.encoder_key}",
+            _retry(
+                runtime,
+                f"upload text manifest {store.encoder_key}",
+                lambda path=path, payload=payload, store=store: api.upload_file(
+                    path_or_fileobj=payload,
+                    path_in_repo=f"{destination}/{path}",
+                    repo_id=REPO_ID,
+                    repo_type="dataset",
+                    commit_message=f"Publish portable text manifest {store.encoder_key}",
+                ),
             )
     _card(api, runtime, f"Update dataset card for encoded dataset {root.name}")

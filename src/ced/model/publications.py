@@ -19,6 +19,7 @@ from huggingface_hub import hf_hub_download
 from huggingface_hub.errors import LocalEntryNotFoundError
 
 from ced.acquisition.base import atomic_write_json, sha256_file
+from ced.acquisition.retry import is_transient_huggingface, retry_transient
 from ced.config.models import PublicationEmbeddingSettings, RuntimeConfig
 from ced.kg.audit import validate_checksums
 from ced.kg.records import canonical_json
@@ -65,7 +66,9 @@ def normalize_publication_id(value: str) -> str | None:
 
 
 def publication_feature_key(settings: PublicationEmbeddingSettings) -> str:
-    payload = settings.model_dump(mode="json", exclude={"batch_size", "fast_transfer", "size"}) | {
+    payload = settings.model_dump(
+        mode="json", exclude={"batch_size", "fast_transfer", "size", "max_tries", "retry_wait_seconds"}
+    ) | {
         "aggregation": "mean-resolved-v1",
         "evidence": "log1p-distinct-v1",
     }
@@ -85,13 +88,21 @@ def resolve_publication_embeddings(runtime: RuntimeConfig, *, download: bool, as
     if settings.fast_transfer:
         os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
     try:
-        resolved = hf_hub_download(
-            repo_id=settings.repo_id,
-            repo_type="dataset",
-            revision=settings.revision,
-            filename=settings.filename,
-            cache_dir=runtime.artifact_path("cache", "huggingface"),
-            local_files_only=not download,
+        # A 20 GiB download against an unreliable CDN gets the shared retry budget before
+        # it may fail; the hub cache resumes completed work between attempts.
+        resolved = retry_transient(
+            lambda: hf_hub_download(
+                repo_id=settings.repo_id,
+                repo_type="dataset",
+                revision=settings.revision,
+                filename=settings.filename,
+                cache_dir=runtime.artifact_path("cache", "huggingface"),
+                local_files_only=not download,
+            ),
+            attempts=settings.max_tries or runtime.download_retries,
+            base_wait=settings.retry_wait_seconds or runtime.download_retry_wait_seconds,
+            label=f"download {settings.filename} from {settings.repo_id}",
+            transient=is_transient_huggingface,
         )
     except (FileNotFoundError, LocalEntryNotFoundError) as error:
         raise FileNotFoundError(

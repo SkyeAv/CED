@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 
 from ced.acquisition.base import AcquisitionBackend, FetchedArtifact, cached_or_verify, verify_artifact
+from ced.acquisition.retry import retry_transient
 from ced.config.models import RuntimeConfig
 from ced.config.sources import Aria2Acquisition, ArtifactSpec, SourceConfig
 from ced.preflight import require_program
@@ -34,6 +35,8 @@ class Aria2Backend(AcquisitionBackend):
         destination.parent.mkdir(parents=True, exist_ok=True)
         partial = destination.with_suffix(f"{destination.suffix}.part")
         connections = self.acquisition.connections or self.runtime.download_connections
+        attempts = self.acquisition.max_tries or self.runtime.download_retries
+        wait = self.acquisition.retry_wait_seconds or self.runtime.download_retry_wait_seconds
         command = [
             aria2,
             "--continue=true",
@@ -44,8 +47,8 @@ class Aria2Backend(AcquisitionBackend):
             f"--max-connection-per-server={connections}",
             f"--split={connections}",
             "--min-split-size=16M",
-            "--max-tries=5",
-            "--retry-wait=5",
+            f"--max-tries={attempts}",
+            f"--retry-wait={round(wait)}",
             "--connect-timeout=30",
             "--timeout=60",
             f"--dir={partial.parent}",
@@ -54,9 +57,19 @@ class Aria2Backend(AcquisitionBackend):
         command.extend(f"--header={name}: {value}" for name, value in self.acquisition.headers.items())
         command.extend(artifact.urls)
         try:
-            subprocess.run(command, check=True)
+            # aria2 retries per connection; the outer pass rides out host outages that
+            # exhaust those retries, resuming from aria2's own control file.
+            retry_transient(
+                lambda: subprocess.run(command, check=True),
+                attempts=attempts,
+                base_wait=wait,
+                label=f"aria2 download of {artifact.path}",
+                transient=lambda error: isinstance(error, subprocess.CalledProcessError),
+            )
         except subprocess.CalledProcessError:
-            raise RuntimeError(f"aria2 download failed; resumable partial retained at {partial}") from None
+            raise RuntimeError(
+                f"aria2 download failed after {attempts} passes; resumable partial retained at {partial}"
+            ) from None
         digest = verify_artifact(partial, artifact)
         partial.replace(destination)
         partial.with_suffix(f"{partial.suffix}.aria2").unlink(missing_ok=True)
