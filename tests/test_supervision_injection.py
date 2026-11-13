@@ -165,6 +165,94 @@ def test_positive_selection_raises_when_empty() -> None:
     assert mask.tolist() == [True, False, True]
 
 
+def test_subsample_keeps_supervision() -> None:
+    # The OOM modulo mask must never thin away supervision edges: the decoder
+    # scores them from endpoint states, so a dropped positive is a dead batch.
+    from ced.model.training import _subsample
+
+    count = 8
+    statement_id = torch.arange(count, dtype=torch.int64)
+    relation_id = torch.arange(count, dtype=torch.int64)
+    edge_type_id = torch.arange(count, dtype=torch.int64)
+    edge_index = torch.stack((statement_id, statement_id))
+    kept_edge, kept_relation, kept_type, kept_statement = _subsample(
+        edge_index, relation_id, edge_type_id, statement_id, 4, supervision=torch.tensor([2, 6], dtype=torch.int64)
+    )
+    assert kept_statement.tolist() == [0, 2, 4, 6]
+    assert kept_relation.tolist() == [0, 2, 4, 6]
+    assert kept_type.tolist() == [0, 2, 4, 6]
+    assert kept_edge.tolist() == [[0, 2, 4, 6], [0, 2, 4, 6]]
+
+
+def test_subsample_identity_at_reduction_one() -> None:
+    from ced.model.training import _subsample
+
+    statement_id = torch.arange(4, dtype=torch.int64)
+    edge_index = torch.stack((statement_id, statement_id))
+    out = _subsample(
+        edge_index, statement_id, statement_id, statement_id, 1, supervision=torch.tensor([1], dtype=torch.int64)
+    )
+    for left, right in zip(out, (edge_index, statement_id, statement_id, statement_id), strict=True):
+        assert torch.equal(left, right)
+
+
+def test_train_metrics_report_reductions(tmp_path: Path) -> None:
+    # The reduction count is the only visible trace of OOM graph thinning; it must
+    # exist in batch metrics (zero on CPU, where the OOM ladder never runs) so
+    # GPU runs remain comparable. Mirrors the minimal manifest of the resume test.
+    import json
+
+    from ced.model.prepare import save_tensor
+    from ced.model.schemas import GraphBatch, NegativeBatch, TrainingExample
+    from ced.model.training import train_batches
+
+    root = tmp_path
+    topology = {
+        "head": np.array([0, 1], dtype=np.int64),
+        "tail": np.array([1, 0], dtype=np.int64),
+        "relation_id": np.array([0, 0], dtype=np.int64),
+        "split": np.array([0, 1], dtype=np.int8),
+        "type_set_id": np.array([0, 0], dtype=np.int64),
+    }
+    tensors = {name: save_tensor(root, name, values) for name, values in topology.items()}
+    directory = root / "batch"
+    directory.mkdir()
+
+    def save(name: str, values: np.ndarray):
+        reference = save_tensor(directory, name, values)
+        reference.path = f"batch/{reference.path}"
+        return reference
+
+    graph = GraphBatch(
+        global_node_id=save("global_node_id", np.array([0, 1], dtype=np.int64)),
+        seed_id=save("seed_id", np.array([0], dtype=np.int64)),
+        type_set_id=save("type_set_id", np.array([0, 0], dtype=np.int64)),
+        edge_index=save("edge_index", np.array([[0, 1], [1, 0]], dtype=np.int64)),
+        relation_id=save("relation_id", np.array([0, 1], dtype=np.int64)),
+        edge_type_id=save("edge_type_id", np.array([0, 1], dtype=np.int64)),
+        statement_id=save("statement_id", np.array([0, 0], dtype=np.int64)),
+        positive_statement_id=save("positive_statement_id", np.array([0], dtype=np.int64)),
+        negative=NegativeBatch(
+            subject=save("negative_subject", np.zeros((1, 2), dtype=np.int64)),
+            object=save("negative_object", np.ones((1, 2), dtype=np.int64)),
+            valid=save("negative_valid", np.array([[True, False]])),
+        ),
+    )
+    (root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "relations": 1,
+                "entities": 2,
+                "statements": 2,
+                "tensors": {k: v.model_dump(mode="json") for k, v in tensors.items()},
+                "batches": [TrainingExample(graph=graph, split="train").model_dump(mode="json")],
+            }
+        )
+    )
+    metrics = train_batches(root, epochs=1, seed=1, device="cpu")
+    assert metrics["reductions"] == 0.0
+
+
 def test_shard_writer_raises_when_supervision_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Injection normally makes missing supervision impossible, so the writer guard
     # is a corruption alarm; faking a sampler that drops statement 1 proves the
