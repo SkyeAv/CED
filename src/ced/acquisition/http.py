@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from http.client import HTTPResponse
+from http.client import HTTPException, HTTPResponse
 from pathlib import Path
 
 from ced.acquisition.base import (
@@ -20,6 +20,7 @@ from ced.acquisition.base import (
     cached_or_verify,
     verify_artifact,
 )
+from ced.acquisition.retry import HttpDownloadError, is_transient, retry_transient
 from ced.config.models import RuntimeConfig
 from ced.config.sources import ArtifactSpec, HttpAcquisition, SourceConfig
 
@@ -36,14 +37,6 @@ _USER_AGENT = "ced-http-backend/1"
 def redact_url(url: str) -> str:
     """Strip the query string: pre-signed redirect targets carry credentials that must never reach a log."""
     return url.split("?", 1)[0]
-
-
-class HttpDownloadError(RuntimeError):
-    """A transfer cannot complete; the ``.part`` file and its state are retained for resume."""
-
-    def __init__(self, message: str, *, status: int | None = None) -> None:
-        super().__init__(message)
-        self.status = status
 
 
 @dataclass(slots=True)
@@ -108,7 +101,18 @@ class HttpBackend(AcquisitionBackend):
         destination.parent.mkdir(parents=True, exist_ok=True)
         digest = ""
         for attempt in (1, 2):
-            self._download(artifact, partial)
+            try:
+                self._download(artifact, partial)
+            except (HttpDownloadError, OSError, HTTPException) as error:
+                # One resume pass: completed segments in the state file are never
+                # re-requested, so an outage longer than one backoff chain only refetches
+                # what is missing instead of failing the whole fetch.
+                if attempt == 2 or not is_transient(error):
+                    raise
+                LOGGER.warning(
+                    "download attempt %d for %s failed (%s); resuming from the retained partial", attempt, origin, error
+                )
+                continue
             try:
                 digest = verify_artifact(partial, artifact)
             except ValueError as error:
@@ -167,24 +171,17 @@ class HttpBackend(AcquisitionBackend):
                 response.close()
 
     def _probe(self, url: str) -> HTTPResponse | None:
-        """Open the transfer probe with the same retry budget as a segment.
+        """Open the transfer probe with the shared retry budget.
 
         A 416 answer to `bytes=0-0` means the object is empty. Permanent 4xx answers fail
         immediately; 408/429 and 5xx answers are transient and retried with backoff.
         """
-        attempts = self.acquisition.max_tries
-        for attempt in range(1, attempts + 1):
-            try:
-                return self._open_probe(url)
-            except HttpDownloadError as error:
-                if attempt == attempts or (
-                    error.status is not None and 400 <= error.status < 500 and error.status not in (408, 429)
-                ):
-                    raise
-                wait = self.acquisition.retry_wait_seconds * 2 ** (attempt - 1)
-                LOGGER.warning("probe attempt %d/%d failed (%s); retrying in %.1fs", attempt, attempts, error, wait)
-                time.sleep(wait)
-        raise AssertionError("unreachable")
+        return retry_transient(
+            lambda: self._open_probe(url),
+            attempts=self.acquisition.max_tries or self.runtime.download_retries,
+            base_wait=self.acquisition.retry_wait_seconds or self.runtime.download_retry_wait_seconds,
+            label=f"probe {redact_url(url)}",
+        )
 
     def _open_probe(self, url: str) -> HTTPResponse | None:
         try:
@@ -288,9 +285,12 @@ class HttpBackend(AcquisitionBackend):
         segment = transfer.segments[index]
         if segment.done:
             return
-        attempts = self.acquisition.max_tries
+        attempts = self.acquisition.max_tries or self.runtime.download_retries
+        base_wait = self.acquisition.retry_wait_seconds or self.runtime.download_retry_wait_seconds
         error: Exception | None = None
+        attempts_used = 0
         for attempt in range(1, attempts + 1):
+            attempts_used = attempt
             response: HTTPResponse | None = None
             try:
                 response = self._open(transfer.url, f"bytes={segment.start}-{segment.end}")
@@ -299,13 +299,13 @@ class HttpBackend(AcquisitionBackend):
                         f"segment {index} lost range support: HTTP {response.status}", status=response.status
                     )
                 self._copy_stream(response, transfer.fd, segment.start, segment.size, label=f"segment {index}")
-            except (HttpDownloadError, OSError) as failure:
+            except (HttpDownloadError, OSError, HTTPException) as failure:
                 error = failure
                 if response is not None:
                     response.close()
-                if attempt == attempts:
+                if attempt == attempts or not is_transient(failure):
                     break
-                wait = self.acquisition.retry_wait_seconds * 2 ** (attempt - 1)
+                wait = base_wait * 2 ** (attempt - 1)
                 LOGGER.warning(
                     "segment %d attempt %d/%d failed (%s); retrying in %.1fs", index, attempt, attempts, failure, wait
                 )
@@ -317,7 +317,7 @@ class HttpBackend(AcquisitionBackend):
                 self._write_state(transfer.partial, transfer.total, transfer.last_modified, transfer.segments)
             return
         raise HttpDownloadError(
-            f"segment {index} of {redact_url(transfer.url)} failed after {attempts} attempts: {error}; "
+            f"segment {index} of {redact_url(transfer.url)} failed after {attempts_used} attempts: {error}; "
             f"resumable partial retained at {transfer.partial}"
         )
 

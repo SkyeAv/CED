@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from ced.acquisition.base import AcquisitionBackend, FetchedArtifact
+from ced.acquisition.retry import is_transient_huggingface, retry_transient
 from ced.config.models import RuntimeConfig
 from ced.config.sources import ArtifactSpec, HuggingFaceAcquisition, SourceConfig
 
@@ -23,13 +24,22 @@ class HuggingFaceBackend(AcquisitionBackend):
 
         if self.acquisition.fast_transfer:
             os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-        path = hf_hub_download(
-            repo_id=self.acquisition.repo_id,
-            repo_type="dataset",
-            revision=self.acquisition.revision,
-            filename=artifact.path,
-            cache_dir=self.cache,
-            local_files_only=not allow_download,
+        # hf_hub_download retries transient network faults internally, but an unreliable
+        # host or CDN outage outlasts that budget; the outer pass resumes from the hub's
+        # own cache and backs off exponentially.
+        path = retry_transient(
+            lambda: hf_hub_download(
+                repo_id=self.acquisition.repo_id,
+                repo_type="dataset",
+                revision=self.acquisition.revision,
+                filename=artifact.path,
+                cache_dir=self.cache,
+                local_files_only=not allow_download,
+            ),
+            attempts=self.acquisition.max_tries or self.runtime.download_retries,
+            base_wait=self.acquisition.retry_wait_seconds or self.runtime.download_retry_wait_seconds,
+            label=f"download {artifact.path} from {self.acquisition.repo_id}",
+            transient=is_transient_huggingface,
         )
         origin = f"https://huggingface.co/datasets/{self.acquisition.repo_id}/resolve/{self.acquisition.revision}/{artifact.path}"
         return FetchedArtifact.from_path(self.source, artifact, path=Path(path), origin=origin)

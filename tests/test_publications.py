@@ -182,6 +182,51 @@ def test_publication_download_requires_explicit_approval(tmp_path: Path, monkeyp
     assert not called
 
 
+def test_publication_download_retries_transient_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The 20 GiB embedding download rides out CDN hiccups with the shared retry budget."""
+    import httpx
+    from huggingface_hub.errors import HfHubHTTPError
+
+    from ced.model.publications import resolve_publication_embeddings
+
+    source = tmp_path / "embeddings.bin"
+    source.write_bytes(b"embeddings")
+    runtime = RuntimeConfig(remote_project=tmp_path, artifact_root=tmp_path / ".ced", disk_reserve_gb=0)
+    runtime.publication_embeddings = runtime.publication_embeddings.model_copy(
+        update={
+            "filename": source.name,
+            "source_sha256": sha256_file(source),
+            "size": source.stat().st_size,
+            "retry_wait_seconds": 0.01,
+        }
+    )
+    monkeypatch.setattr("ced.model.publications.require_cpu_worker", lambda runtime: None)
+    attempts: list[str] = []
+
+    def flaky(**kwargs: object) -> str:
+        attempts.append(str(kwargs["filename"]))
+        if len(attempts) == 1:
+            raise HfHubHTTPError(
+                "unavailable",
+                response=httpx.Response(status_code=502, request=httpx.Request("GET", "https://huggingface.co")),
+            )
+        return str(source)
+
+    monkeypatch.setattr("ced.model.publications.hf_hub_download", flaky)
+    assert resolve_publication_embeddings(runtime, download=True, assume_yes=True) == source
+    assert len(attempts) == 2
+
+
+def test_publication_feature_key_ignores_retry_policy(tmp_path: Path) -> None:
+    """Retry knobs change transport behavior, never the embedding content: the cache key must stay stable."""
+    from ced.model.publications import publication_feature_key
+
+    runtime = RuntimeConfig(remote_project=tmp_path, artifact_root=tmp_path / ".ced")
+    settings = runtime.publication_embeddings
+    tuned = settings.model_copy(update={"max_tries": 9, "retry_wait_seconds": 60.0})
+    assert publication_feature_key(settings) == publication_feature_key(tuned)
+
+
 def _attach_publication_features(root: Path) -> PublicationFeatureStore:
     document = json.loads((root / "manifest.json").read_text())
     from ced.model.prepare import save_tensor

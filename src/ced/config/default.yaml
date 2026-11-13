@@ -8,6 +8,8 @@ memory_limit: ${CED_MEMORY_LIMIT:-16GB}
 disk_reserve_gb: ${CED_DISK_RESERVE_GB:-32}
 download_connections: ${CED_DOWNLOAD_CONNECTIONS:-8}
 download_jobs: ${CED_DOWNLOAD_JOBS:-4}
+download_retries: ${CED_DOWNLOAD_RETRIES:-5}
+download_retry_wait_seconds: ${CED_DOWNLOAD_RETRY_WAIT_SECONDS:-5}
 source_directory: src/ced/config/sources
 graph_config: src/ced/graphs/ced-graph.yaml
 modal:

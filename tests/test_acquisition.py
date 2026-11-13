@@ -129,6 +129,33 @@ def test_aria2_resume_and_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert "--continue=true" in calls[0]
 
 
+def test_aria2_retries_exhausted_process_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """aria2c gives up when a host outage outlasts its per-connection retries; the backend
+    must back off and rerun the whole download instead of failing the fetch."""
+    selected = source(
+        Aria2Acquisition(backend="aria2", retry_wait_seconds=0.01),
+        [ArtifactSpec(path="nodes.ndjson", role="nodes", urls=["https://example.invalid/nodes"], sha256=DIGEST)],
+    )
+    backend = Aria2Backend(runtime(tmp_path), selected)
+    monkeypatch.setattr("ced.acquisition.aria2.require_program", lambda name: "/usr/bin/aria2c")
+    calls: list[list[str]] = []
+
+    def flaky(command: list[str], check: bool) -> None:
+        assert check
+        calls.append(command)
+        if len(calls) == 1:
+            raise subprocess.CalledProcessError(returncode=4, cmd="aria2c")
+        values = {item.split("=", 1)[0]: item.split("=", 1)[1] for item in command if item.startswith("--")}
+        (Path(values["--dir"]) / values["--out"]).write_bytes(PAYLOAD)
+
+    monkeypatch.setattr(subprocess, "run", flaky)
+    fetched = backend.fetch(selected.artifacts[0], allow_download=True)
+    assert fetched.path.read_bytes() == PAYLOAD
+    assert len(calls) == 2
+    assert "--max-tries=5" in calls[0]
+    assert "--retry-wait=0" in calls[0]
+
+
 def test_aria2_checksum_failure_retains_partial(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     selected = source(
         Aria2Acquisition(backend="aria2"),
@@ -172,6 +199,59 @@ def test_huggingface_offline_uses_native_cache(tmp_path: Path, monkeypatch: pyte
     artifact = backend.fetch(selected.artifacts[0], allow_download=False)
     assert isinstance(artifact, FetchedArtifact)
     assert artifact.path == payload
+
+
+def test_huggingface_download_retries_transient_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unreliable CDN must be retried with backoff before the fetch reports failure."""
+    import httpx
+    from huggingface_hub.errors import HfHubHTTPError
+
+    payload = tmp_path / "cached.ndjson"
+    payload.write_bytes(PAYLOAD)
+    selected = source(
+        HuggingFaceAcquisition(
+            backend="huggingface", repo_id="SkyeAv/fixture", revision="a" * 40, retry_wait_seconds=0.01
+        )
+    )
+    backend = HuggingFaceBackend(runtime(tmp_path), selected)
+    attempts: list[str] = []
+
+    def flaky(**kwargs: object) -> str:
+        attempts.append(str(kwargs["filename"]))
+        if len(attempts) == 1:
+            raise HfHubHTTPError(
+                "unavailable",
+                response=httpx.Response(status_code=503, request=httpx.Request("GET", "https://huggingface.co")),
+            )
+        return str(payload)
+
+    monkeypatch.setattr("huggingface_hub.hf_hub_download", flaky)
+    artifact = backend.fetch(selected.artifacts[0], allow_download=True)
+    assert isinstance(artifact, FetchedArtifact)
+    assert artifact.path == payload
+    assert len(attempts) == 2
+
+
+def test_huggingface_missing_entry_fails_without_retries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing file is permanent; retrying it only delays the actionable error."""
+    from huggingface_hub.errors import EntryNotFoundError
+
+    selected = source(
+        HuggingFaceAcquisition(
+            backend="huggingface", repo_id="SkyeAv/fixture", revision="a" * 40, retry_wait_seconds=0.01
+        )
+    )
+    backend = HuggingFaceBackend(runtime(tmp_path), selected)
+    attempts: list[str] = []
+
+    def missing(**kwargs: object) -> str:
+        attempts.append(str(kwargs["filename"]))
+        raise EntryNotFoundError("absent")
+
+    monkeypatch.setattr("huggingface_hub.hf_hub_download", missing)
+    with pytest.raises(EntryNotFoundError):
+        backend.fetch(selected.artifacts[0], allow_download=True)
+    assert len(attempts) == 1
 
 
 def make_archive(path: Path, symlink: bool = False) -> None:

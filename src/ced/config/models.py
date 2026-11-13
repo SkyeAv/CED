@@ -11,6 +11,18 @@ class ConfigBase(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
 
+class RetryPolicy(ConfigBase):
+    """Optional per-source overrides of the runtime download retry defaults.
+
+    ``None`` falls back to ``RuntimeConfig.download_retries`` and
+    ``RuntimeConfig.download_retry_wait_seconds`` so unreliable hosts can ask for more
+    attempts without every source config repeating the policy.
+    """
+
+    max_tries: int | None = Field(default=None, ge=1, le=10)
+    retry_wait_seconds: float | None = Field(default=None, gt=0, le=300)
+
+
 class ModalSettings(ConfigBase):
     gpu: str = "L40S"
     timeout_seconds: int = Field(default=86_400, gt=0)
@@ -101,7 +113,7 @@ class TextEncodingSettings(ConfigBase):
     ensemble: EnsembleTextEncodingSettings = Field(default_factory=EnsembleTextEncodingSettings)
 
 
-class PublicationEmbeddingSettings(ConfigBase):
+class PublicationEmbeddingSettings(RetryPolicy):
     repo_id: str = "glusman-team/medcpt-ae"
     revision: str = Field(default="3c923644c682a9664f1409ce07ae4e78b622bcf5", pattern=r"^[0-9a-f]{40}$")
     filename: str = "medcpt-embeddings-128.parquet"
@@ -136,6 +148,8 @@ class RuntimeConfig(ConfigBase):
     disk_reserve_gb: float = Field(default=32, ge=0)
     download_connections: int = Field(default=8, ge=1, le=32)
     download_jobs: int = Field(default=4, ge=1, le=4)
+    download_retries: int = Field(default=5, ge=1, le=10)
+    download_retry_wait_seconds: float = Field(default=5, gt=0, le=300)
     source_directory: Path = Path("src/ced/config/sources")
     graph_config: Path = Path("src/ced/graphs/ced-graph.yaml")
     modal: ModalSettings = Field(default_factory=ModalSettings)
