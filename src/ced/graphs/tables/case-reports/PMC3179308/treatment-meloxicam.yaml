@@ -1,0 +1,50 @@
+template:
+  source:
+    kind: text
+    local: ./src/ced/graphs/data/placeholder.tsv
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC3179308/
+    delimiter: /t
+  statement:
+    subject:
+      method: value
+      prioritize:
+      - Treatment
+      taxon_from: species_context_qualifier
+    predicate: applied_to_treat
+    object:
+      method: value
+      encoding: camurati-englemann disease
+      prioritize:
+      - Disease
+      taxon_from: species_context_qualifier
+    qualifiers:
+    - qualifier: species_context_qualifier
+      method: value
+      encoding: homo sapiens
+      prioritize:
+      - OrganismTaxon
+    - qualifier: population_context_qualifier
+      method: value
+      prioritize:
+      - PopulationOfIndividualOrganisms
+      taxon_from: species_context_qualifier
+  provenance:
+    repo: PMC
+    publication: PMC3179308
+  annotations:
+  - annotation: study_size
+    method: value
+  - annotation: number_of_cases
+    method: value
+sections:
+- statement:
+    subject:
+      encoding: meloxicam
+    qualifiers:
+    - qualifier: population_context_qualifier
+      encoding: Case_Report_PMC3179308
+  annotations:
+  - annotation: study_size
+    encoding: 2
+  - annotation: number_of_cases
+    encoding: 1

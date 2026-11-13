@@ -1,0 +1,45 @@
+template:
+  source:
+    kind: text
+    local: ./src/ced/graphs/data/placeholder.tsv
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC5902284/
+    delimiter: /t
+  statement:
+    subject:
+      method: value
+      encoding: camurati-englemann disease
+      prioritize:
+      - Disease
+      taxon_from: species_context_qualifier
+    predicate: affects
+    object:
+      method: value
+      prioritize:
+      - PopulationOfIndividualOrganisms
+      taxon_from: species_context_qualifier
+    qualifiers:
+    - qualifier: species_context_qualifier
+      method: value
+      encoding: homo sapiens
+      prioritize:
+      - OrganismTaxon
+  provenance:
+    repo: PMC
+    publication: PMC5902284
+  annotations:
+  - annotation: study_size
+    method: value
+  - annotation: effect_size
+    method: value
+  - annotation: effect_type
+    method: value
+    encoding: odds_ratio
+sections:
+- statement:
+    object:
+      encoding: Case_Report_PMC5902284
+  annotations:
+  - annotation: study_size
+    encoding: 4
+  - annotation: effect_size
+    encoding: 1.0

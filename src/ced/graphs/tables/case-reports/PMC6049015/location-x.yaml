@@ -1,0 +1,38 @@
+template:
+  source:
+    kind: text
+    local: ./src/ced/graphs/data/placeholder.tsv
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC6049015/
+    delimiter: /t
+  statement:
+    subject:
+      method: value
+      prioritize:
+      - PopulationOfIndividualOrganisms
+      taxon_from: species_context_qualifier
+    predicate: location_of
+    object:
+      method: value
+      prioritize:
+      - GeographicLocation
+    qualifiers:
+    - qualifier: species_context_qualifier
+      method: value
+      encoding: homo sapiens
+      prioritize:
+      - OrganismTaxon
+  provenance:
+    repo: PMC
+    publication: PMC6049015
+  annotations:
+  - annotation: study_size
+    method: value
+sections:
+- statement:
+    subject:
+      encoding: Case_Report_PMC6049015
+    object:
+      encoding: Tanzania
+  annotations:
+  - annotation: study_size
+    encoding: 1
