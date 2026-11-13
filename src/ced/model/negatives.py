@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from functools import partial
 
 import numpy as np
 
@@ -85,6 +86,60 @@ def _pool(pools: TypedPools, relation: int, side: int) -> np.ndarray | None:
     return dictionary.get(relation)
 
 
+_EXHAUSTIVE_POOL_LIMIT = 4096
+_REJECTION_ROUNDS = 8
+
+
+def _encoded(candidates: np.ndarray, relation: int, side: int, fixed: int, context: NegativeContext) -> np.ndarray:
+    """Encode one candidate array without per-candidate Python membership checks."""
+    fixed_array = np.full(candidates.shape, fixed, dtype=np.int64)
+    return (
+        (candidates * context.relation_count + relation) * context.node_count + fixed_array
+        if side == 0
+        else (fixed_array * context.relation_count + relation) * context.node_count + candidates
+    )
+
+
+def _eligible(pool: np.ndarray, relation: int, side: int, fixed: int, context: NegativeContext) -> np.ndarray:
+    return pool[~_contains(context.keys, _encoded(pool, relation, side, fixed, context))]
+
+
+def choose_candidates(
+    size: int,
+    count: int,
+    random: np.random.Generator,
+    lookup: Callable[[np.ndarray], np.ndarray],
+    eligible: Callable[[np.ndarray], np.ndarray],
+    exhaustive: Callable[[], np.ndarray],
+) -> np.ndarray:
+    """Draw a uniform ordered subset, bounding work before an exact fallback."""
+    if count == 0:
+        return np.empty(0, dtype=np.int64)
+    if size <= _EXHAUSTIVE_POOL_LIMIT or count >= size:
+        available = exhaustive()
+        return random.choice(available, size=min(count, len(available)), replace=False)
+    chosen: list[int] = []
+    drawn: set[int] = set()
+    for _ in range(_REJECTION_ROUNDS):
+        remaining = count - len(chosen)
+        if remaining == 0:
+            return np.asarray(chosen, dtype=np.int64)
+        draws = lookup(random.choice(size, size=min(size, max(remaining * 2, 16)), replace=False))
+        fresh = [int(candidate) for candidate in draws if int(candidate) not in drawn]
+        if not fresh:
+            continue
+        drawn.update(fresh)
+        candidates = np.asarray(fresh, dtype=np.int64)
+        accepted = eligible(candidates)
+        chosen.extend(int(candidate) for candidate in accepted[:remaining])
+    available = exhaustive()
+    if chosen:
+        available = available[~np.isin(available, np.asarray(chosen, dtype=np.int64))]
+    remaining = count - len(chosen)
+    selected = random.choice(available, size=min(remaining, len(available)), replace=False)
+    return np.asarray([*chosen, *selected.tolist()], dtype=np.int64)
+
+
 def sample_negatives(
     triples: Iterable[tuple[int, int, int]],
     pools: TypedPools,
@@ -93,79 +148,37 @@ def sample_negatives(
     count: int,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Typed corruption negatives identical to the reference row/column loop.
+    """Sample typed corruptions uniformly without replacement on each side.
 
-    Preserves the exact RNG contract of the original implementation: one
-    integers() draw per drawable cell in row-major order, then a wraparound
-    scan from that offset taking the first candidate that is not a known
-    positive. Cells whose pool is missing or empty stay invalid.
+    Invalid cells retain the original endpoints and are marked false. A bounded
+    rejection phase handles large sparse pools; exact eligible enumeration is
+    used for small pools and as the deterministic fallback for dense pools.
     """
+    if count < 0:
+        raise ValueError("negative count must be nonnegative")
     rows = list(triples)
     subjects = np.zeros((len(rows), count), dtype=np.int64)
     objects = np.zeros_like(subjects)
     valid = np.zeros((len(rows), count), dtype=np.bool_)
-    if not rows or count <= 0:
+    if not rows or count == 0:
         return subjects, objects, valid
-    row_heads = np.fromiter((row[0] for row in rows), dtype=np.int64, count=len(rows))
-    row_relations = np.fromiter((row[1] for row in rows), dtype=np.int64, count=len(rows))
-    row_tails = np.fromiter((row[2] for row in rows), dtype=np.int64, count=len(rows))
-    subjects[:] = row_heads[:, None]
-    objects[:] = row_tails[:, None]
     random = np.random.default_rng(seed)
-    cell_rows = np.repeat(np.arange(len(rows)), count)
-    cell_columns = np.tile(np.arange(count), len(rows))
-    pairs = row_relations[cell_rows] * 2 + cell_columns % 2
-    unique_pairs, inverse = np.unique(pairs, return_inverse=True)
-    pool_lengths = np.array(
-        [
-            len(pool) if (pool := _pool(pools, int(pair) // 2, int(pair) % 2)) is not None else 0
-            for pair in unique_pairs.tolist()
-        ],
-        dtype=np.int64,
-    )
-    lengths = pool_lengths[inverse]
-    starts = np.zeros(cell_rows.size, dtype=np.int64)
-    drawable = lengths > 0
-    if drawable.any():
-        # Row-major draws over exactly the cells the reference implementation
-        # would draw for, in the same order.
-        starts[drawable] = random.integers(lengths[drawable])
-    for pair, length in zip(unique_pairs.tolist(), pool_lengths.tolist(), strict=True):
-        if length <= 0:
-            continue
-        relation, side = int(pair) // 2, int(pair) % 2
-        members = np.flatnonzero(pairs == pair)
-        pool = _pool(pools, relation, side)
-        assert pool is not None
-        fixed = row_tails[cell_rows[members]] if side == 0 else row_heads[cell_rows[members]]
-        group_starts = starts[members]
-        resolved = np.zeros(members.size, dtype=np.bool_)
-        values = np.zeros(members.size, dtype=np.int64)
-        active = np.arange(members.size)
-        offset = 0
-        while active.size:
-            candidates = pool[(group_starts[active] + offset) % length]
-            query = (
-                (candidates * context.relation_count + relation) * context.node_count + fixed[active]
-                if side == 0
-                else (fixed[active] * context.relation_count + relation) * context.node_count + candidates
+    for index, (head, relation, tail) in enumerate(rows):
+        subjects[index, :], objects[index, :] = head, tail
+        for side in (0, 1):
+            columns = np.arange(side, count, 2)
+            pool = _pool(pools, relation, side)
+            if pool is None or len(pool) == 0:
+                continue
+            fixed = tail if side == 0 else head
+            eligible = partial(_eligible, relation=relation, side=side, fixed=fixed, context=context)
+            chosen = choose_candidates(
+                len(pool), len(columns), random, pool.__getitem__, eligible, partial(eligible, pool)
             )
-            accepted = ~_contains(context.keys, query)
-            if accepted.any():
-                chosen = active[accepted]
-                values[chosen] = candidates[accepted]
-                resolved[chosen] = True
-                active = active[~accepted]
-                if not active.size:
-                    break
-            offset += 1
-            if offset >= length:
-                break
-        chosen = members[resolved]
-        if chosen.size:
-            if side == 0:
-                subjects[cell_rows[chosen], cell_columns[chosen]] = values[resolved]
-            else:
-                objects[cell_rows[chosen], cell_columns[chosen]] = values[resolved]
-            valid[cell_rows[chosen], cell_columns[chosen]] = True
+            for column, candidate in zip(columns, chosen, strict=False):
+                if side == 0:
+                    subjects[index, column] = candidate
+                else:
+                    objects[index, column] = candidate
+                valid[index, column] = True
     return subjects, objects, valid
