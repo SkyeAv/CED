@@ -10,33 +10,10 @@ import torch  # pyright: ignore[reportMissingImports]
 
 from ced.model.negatives import TypedPools, typed_pools
 from ced.model.schemas import TensorRef
-from ced.model.training import Device, RelationalAutoencoder, build_model, resolve_device
+from ced.model.training import Device, RelationalAutoencoder, build_model, persisted_edge_type_count, resolve_device
 
 Ranking = Literal["exact", "sampled"]
 _TARGET_BATCH_SIZE = 32
-
-
-def _first_occurrence_ids(rows: torch.Tensor) -> tuple[torch.Tensor, int]:
-    """Label each row with the id that first-occurrence order would assign.
-
-    Reproduces ``keys.setdefault(tuple(row), len(keys))`` over ``rows`` with no
-    Python loop and no per-row host sync: ``unique`` sorts the distinct rows, a
-    segment-min recovers each unique row's first position, and an ``argsort`` of
-    those positions renumbers the uniques by appearance. The returned ids are
-    therefore bitwise identical to the historical insertion order.
-    """
-    unique_rows, inverse = torch.unique(rows, return_inverse=True, dim=0)
-    count = int(unique_rows.shape[0])
-    if count == 0:
-        return torch.empty(rows.shape[0], dtype=torch.long, device=rows.device), 0
-    inverse = inverse.reshape(-1)
-    positions = torch.arange(rows.shape[0], device=rows.device)
-    first_position = torch.full((count,), rows.shape[0], dtype=torch.long, device=rows.device)
-    first_position.scatter_reduce_(0, inverse, positions, reduce="amin", include_self=True)
-    appearance = torch.argsort(first_position)
-    renumbered = torch.empty(count, dtype=torch.long, device=rows.device)
-    renumbered[appearance] = torch.arange(count, device=rows.device)
-    return renumbered[inverse], count
 
 
 def _group_pairs(pairs: np.ndarray, values: np.ndarray) -> dict[tuple[int, int], set[int]]:
@@ -66,30 +43,18 @@ def _build_positives(edge_index: torch.Tensor, relations: torch.Tensor) -> dict[
 
 
 def _full_messages(
-    edge_index: torch.Tensor, relations: torch.Tensor, splits: torch.Tensor, types: torch.Tensor
+    edge_index: torch.Tensor, relations: torch.Tensor, splits: torch.Tensor, edge_types: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
     train = torch.nonzero(splits == 0).flatten()
     if not train.numel():
         raise ValueError("evaluation requires at least one training statement for topology")
-    max_relation = int(relations.max())
-    heads = edge_index[0, train]
-    tails = edge_index[1, train]
     train_relations = relations[train]
-    type_head = types[heads]
-    type_tail = types[tails]
-    # Interleave forward then reverse triples per train position so one labeling
-    # pass reproduces the historical order: the forward key is inserted before
-    # the reverse key for the same statement.
-    forward_triples = torch.stack((type_head, train_relations, type_tail), dim=1)
-    reverse_triples = torch.stack((type_tail, train_relations + max_relation + 1, type_head), dim=1)
-    sequence = torch.stack((forward_triples, reverse_triples), dim=1).reshape(-1, 3)
-    labels, key_count = _first_occurrence_ids(sequence)
-    forward = labels[0::2]
-    reverse = labels[1::2]
+    train_types = edge_types[train]
+    key_count = int(train_types.max()) + 1
     return (
         torch.cat((edge_index[:, train], edge_index[[1, 0]][:, train]), dim=1),
-        torch.cat((train_relations, train_relations + max_relation + 1)),
-        torch.cat((forward, reverse)),
+        torch.cat((train_relations, train_relations + int(relations.max()) + 1)),
+        torch.cat((train_types, train_types)),
         key_count,
     )
 
@@ -206,18 +171,14 @@ def evaluate_dataset(
     def tensor(name: str) -> torch.Tensor:
         return torch.from_numpy(arrays[name]).to(resolved)
 
-    edge_index = torch.from_numpy(np.stack((arrays["head"], arrays["tail"])))
-    relations, splits, types = (
-        tensor("relation_id"),
-        tensor("split"),
-        tensor("type_set_id"),
+    edge_type_count = persisted_edge_type_count(document, root, arrays=arrays)
+    edge_index = torch.from_numpy(np.stack((arrays["head"], arrays["tail"]))).to(resolved)
+    relations, splits, edge_types = tensor("relation_id"), tensor("split"), tensor("edge_type_id")
+    messages, message_relations, message_types, message_count = _full_messages(
+        edge_index, relations, splits, edge_types
     )
-    messages, message_relations, message_types, edge_type_count = _full_messages(edge_index, relations, splits, types)
-    messages, message_relations, message_types = (
-        messages.to(resolved),
-        message_relations.to(resolved),
-        message_types.to(resolved),
-    )
+    if message_count != edge_type_count:
+        raise ValueError("edge type count differs between full evaluation messages and the manifest")
     train_statements = torch.nonzero(splits == 0).flatten()
     message_statements = torch.cat((train_statements, train_statements)).to(resolved)
     model = build_model(document, root, edge_type_count, seed).to(resolved)

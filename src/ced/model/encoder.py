@@ -21,7 +21,7 @@ class RelationalAttentionEncoder(nn.Module):
         self.queries = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(edge_types)])
         self.keys = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(edge_types)])
         self.values = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(edge_types)])
-        self.outputs = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(edge_types)])
+        self.outputs = nn.ModuleList([nn.Linear(dimension, dimension) for _ in range(layers)])
         self.gates = nn.Linear(statement_dimension, dimension)
         self.norms = nn.ModuleList([nn.LayerNorm(dimension) for _ in range(layers)])
         self.output = nn.LayerNorm(dimension)

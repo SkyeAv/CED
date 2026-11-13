@@ -10,6 +10,7 @@ import pyarrow.parquet as pq
 from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.model.prepare import save_tensor
 from ced.model.schemas import DatasetManifest, GraphBatch, NegativeBatch, TrainingExample
+from ced.model.shards import _edge_type_ids
 
 
 def write_table(path: Path, column: str, values: list[Any]) -> None:
@@ -43,12 +44,19 @@ def synthetic_dataset(root: Path, *, batches: int = 3, nodes_per_batch: int = 64
         ),
         root / "entities.parquet",
     )
+    head = np.array([0, 0, 1], dtype=np.int64)
+    tail = np.array([1, 2, 2], dtype=np.int64)
+    relations = np.zeros(statements, dtype=np.int64)
+    splits = np.array([0, 1, 2], dtype=np.int8)
+    types = np.zeros(statements, dtype=np.int64)
+    edge_types = _edge_type_ids(np.stack((head, tail)), relations, splits, types)
     tensors = {
-        "head": save_tensor(root, "head", np.array([0, 0, 1], dtype=np.int64)),
-        "tail": save_tensor(root, "tail", np.array([1, 2, 2], dtype=np.int64)),
-        "relation_id": save_tensor(root, "relation_id", np.zeros(statements, dtype=np.int64)),
-        "split": save_tensor(root, "split", np.array([0, 1, 2], dtype=np.int8)),
-        "type_set_id": save_tensor(root, "type_set_id", np.zeros(statements, dtype=np.int64)),
+        "head": save_tensor(root, "head", head),
+        "tail": save_tensor(root, "tail", tail),
+        "relation_id": save_tensor(root, "relation_id", relations),
+        "split": save_tensor(root, "split", splits),
+        "type_set_id": save_tensor(root, "type_set_id", types),
+        "edge_type_id": save_tensor(root, "edge_type_id", edge_types),
     }
     write_table(root / "relations.parquet", "id", ["p"])
     write_table(root / "types.parquet", "categories", [["biolink:Gene"]])
@@ -76,7 +84,7 @@ def synthetic_dataset(root: Path, *, batches: int = 3, nodes_per_batch: int = 64
             type_set_id=save("type_set_id", np.zeros(2, dtype=np.int64)),
             edge_index=save("edge_index", np.array([[0, 1], [1, 0]], dtype=np.int64)),
             relation_id=save("relation_id", np.array([0, 1], dtype=np.int64)),
-            edge_type_id=save("edge_type_id", np.array([0, 1], dtype=np.int64)),
+            edge_type_id=save("edge_type_id", np.array([0, 0], dtype=np.int64)),
             statement_id=save("statement_id", np.array([0, 0], dtype=np.int64)),
             positive_statement_id=save("positive_statement_id", np.array([0], dtype=np.int64)),
             negative=NegativeBatch(
@@ -93,6 +101,7 @@ def synthetic_dataset(root: Path, *, batches: int = 3, nodes_per_batch: int = 64
         entities=3,
         relations=1,
         statements=statements,
+        edge_type_count=1,
         tensors=tensors,
         batches=examples,
     )

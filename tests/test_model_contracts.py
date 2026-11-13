@@ -327,6 +327,7 @@ def test_training_checkpoint_resumes_epoch(tmp_path: Path) -> None:
         "relation_id": np.array([0, 0], dtype=np.int64),
         "split": np.array([0, 1], dtype=np.int8),
         "type_set_id": np.array([0, 0], dtype=np.int64),
+        "edge_type_id": np.array([0, 0], dtype=np.int64),
     }
     tensors = {name: save_tensor(root, name, values) for name, values in topology.items()}
     directory = root / "batch"
@@ -343,7 +344,7 @@ def test_training_checkpoint_resumes_epoch(tmp_path: Path) -> None:
         type_set_id=save("type_set_id", np.array([0, 0], dtype=np.int64)),
         edge_index=save("edge_index", np.array([[0, 1], [1, 0]], dtype=np.int64)),
         relation_id=save("relation_id", np.array([0, 1], dtype=np.int64)),
-        edge_type_id=save("edge_type_id", np.array([0, 1], dtype=np.int64)),
+        edge_type_id=save("edge_type_id", np.array([0, 0], dtype=np.int64)),
         statement_id=save("statement_id", np.array([0, 0], dtype=np.int64)),
         positive_statement_id=save("positive_statement_id", np.array([0], dtype=np.int64)),
         negative=NegativeBatch(
@@ -358,6 +359,7 @@ def test_training_checkpoint_resumes_epoch(tmp_path: Path) -> None:
                 "relations": 1,
                 "entities": 2,
                 "statements": 2,
+                "edge_type_count": 1,
                 "tensors": {k: v.model_dump(mode="json") for k, v in tensors.items()},
                 "batches": [TrainingExample(graph=graph, split="train").model_dump(mode="json")],
             }
