@@ -169,6 +169,66 @@ def test_modal_parts_adopt_with_row_and_key_validation(tmp_path: Path, monkeypat
     assert [part.load(tmp_path).shape for part in cache.part_refs()] == [(2, 4), (1, 4)]
 
 
+def test_modal_adoption_commits_each_validated_part(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bad later part must not roll back an earlier validated Modal part.
+
+    Why: durable per-part publication is what bounds cloud recompute after a
+    failure. The sliced retry also proves that adoption compares the incoming
+    keys with the requested input range rather than starting at row zero again.
+    """
+    monkeypatch.setattr("ced.model.encoding.PART_ROWS", 2)
+    texts = ["one", "two", "three"]
+    missing = tmp_path / "missing.parquet"
+    pq.write_table(pa.table({"text_sha256": [text_key(text) for text in texts], "text": texts}), missing)
+    encoded = tmp_path / "encoded"
+    encode_missing_to_parts(missing, encoded, RandomTextEncoder(4))
+    second_index = encoded / "index" / "part-000001.parquet"
+    second = pq.read_table(second_index)
+    pq.write_table(second.set_column(1, "row", pa.array([99], pa.int64())), second_index)
+    cache = TextEmbeddingCache(tmp_path / "cache", TextEncodingSettings(provider="random", dimension=4))
+
+    with pytest.raises(ValueError, match="row mismatch"):
+        cache.adopt_parts(encoded, missing)
+    assert cache.manifest()["rows"] == 2
+
+    pq.write_table(second.set_column(1, "row", pa.array([2], pa.int64())), second_index)
+    assert cache.adopt_parts(encoded, missing, input_row_start=2, rows=1) == 1
+    assert cache.manifest()["rows"] == 3
+    assert [part.load(tmp_path).shape for part in cache.part_refs()] == [(2, 4), (1, 4)]
+
+    duplicate_missing = tmp_path / "duplicate.parquet"
+    pq.write_table(pa.table({"text_sha256": [text_key("one")], "text": ["one"]}), duplicate_missing)
+    duplicate = tmp_path / "duplicate-encoded"
+    encode_missing_to_parts(duplicate_missing, duplicate, RandomTextEncoder(4), start_row=3, start_part=2)
+    with pytest.raises(ValueError, match="already cached"):
+        cache.adopt_parts(duplicate, duplicate_missing)
+    assert cache.manifest()["rows"] == 3
+
+
+def test_modal_adoption_rejects_invalid_slices_and_duplicate_keys(tmp_path: Path) -> None:
+    """Invalid input bounds and duplicate incoming keys cannot publish vectors.
+
+    Why: a resume descriptor is untrusted orchestration data. Bounds must fail
+    before reading artifacts, and duplicate rows must fail before they create an
+    ambiguous text-to-vector relation.
+    """
+    missing = tmp_path / "missing.parquet"
+    pq.write_table(pa.table({"text_sha256": [text_key("new"), text_key("new")], "text": ["new", "new"]}), missing)
+    cache = TextEmbeddingCache(tmp_path / "cache", TextEncodingSettings(provider="random", dimension=4))
+    with pytest.raises(ValueError, match="invalid Modal input slice"):
+        cache.adopt_parts(tmp_path / "encoded", missing, input_row_start=-1)
+    with pytest.raises(ValueError, match="invalid Modal input slice"):
+        cache.adopt_parts(tmp_path / "encoded", missing, rows=-1)
+    with pytest.raises(ValueError, match="invalid Modal input slice"):
+        cache.adopt_parts(tmp_path / "encoded", missing, input_row_start=1, rows=2)
+
+    encoded = tmp_path / "encoded"
+    encode_missing_to_parts(missing, encoded, RandomTextEncoder(4))
+    with pytest.raises(ValueError, match="duplicated"):
+        cache.adopt_parts(encoded, missing)
+    assert cache.manifest()["rows"] == 0
+
+
 def test_modal_adoption_rejects_non_finite_values(tmp_path: Path) -> None:
     missing = tmp_path / "missing.parquet"
     pq.write_table(pa.table({"text_sha256": [text_key("one")], "text": ["one"]}), missing)
