@@ -114,25 +114,24 @@ def create_app(
         "volumes": {"/data": volume},
     }
 
-    def _prepare(payload: dict[str, Any]) -> Path:
-        scratch = Path(payload["root"])
-        if scratch.exists():
-            shutil.rmtree(scratch)
-        shutil.copytree("/data/dataset", scratch)
+    def _prepare(payload: dict[str, Any], volume: Any) -> Path:
+        volume.reload()
+        root = Path(payload["root"])
         checkpoint = Path(payload.get("checkpoint_path", "/scratch/checkpoint.pt"))
+        checkpoint.unlink(missing_ok=True)
         source = Path("/data/checkpoint.pt")
         if source.exists():
             checkpoint.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, checkpoint)
         output = Path(payload["output_prefix"])
         output.mkdir(parents=True, exist_ok=True)
-        return scratch
+        return root
 
     @app.function(**common)
     def train_group(payload: dict[str, Any], volume: Any) -> dict[str, Any]:
         from ced.model.training import train_batches
 
-        root = _prepare(payload)
+        root = _prepare(payload, volume)
         metrics = train_batches(
             root,
             epochs=payload["epochs"],
@@ -141,7 +140,9 @@ def create_app(
             checkpoint_path=Path(payload["checkpoint_path"]),
             device=payload.get("device", "cuda"),
             selected_indices=payload["selected_indices"],
+            start_epoch=payload["start_epoch"],
             start_cursor=payload["start_cursor"],
+            edge_type_count=payload["edge_type_count"],
             global_cursor=payload.get("global_cursor"),
             max_batches=payload["max_batches"],
             auxiliary_weight=payload.get("auxiliary_weight", 0.1),
@@ -164,7 +165,7 @@ def create_app(
     def evaluate(payload: dict[str, Any], volume: Any) -> dict[str, Any]:
         from ced.model.evaluation import evaluate_dataset
 
-        root = _prepare(payload)
+        root = _prepare(payload, volume)
         report = evaluate_dataset(
             root,
             split=payload.get("split", "test"),
@@ -193,11 +194,12 @@ def create_app(
             from ced.model.encoding import iter_encode_missing_parts
             from ced.model.text_models import create_ensemble_encoder
 
-            root = _prepare(payload)
+            root = _prepare(payload, volume)
             settings = EnsembleTextEncodingSettings.model_validate(payload["ensemble"])
             encoder = create_ensemble_encoder(settings, device="cuda")
             model_volume.commit()
-            staged = root / "encoded"
+            staged = Path("/scratch/text-encoded")
+            shutil.rmtree(staged, ignore_errors=True)
             output = Path(payload["output_prefix"])
             for descriptor in iter_encode_missing_parts(
                 root / "missing.parquet",

@@ -15,7 +15,7 @@ graph_config: src/ced/graphs/ced-graph.yaml
 modal:
   gpu: L40S
   timeout_seconds: 86400
-  single_use_containers: true
+  single_use_containers: false
   cpu: 8
   memory_mb: 65536
   max_shared_bytes: 68719476736

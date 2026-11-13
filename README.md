@@ -137,15 +137,15 @@ Modal jobs use an ephemeral anonymous volume, not a persistent named dataset vol
 2. Creates a run directory under `.ced/runs/`.
 3. Plans bounded batch groups from `modal.max_batch_group_bytes`.
 4. Requires interactive `RUN` confirmation or explicit `--yes`.
-5. Uploads shared topology/features once, then one bounded batch group at a time.
-6. Runs GPU training or inference in a single-use container.
-7. Downloads each group's checkpoint and metrics into a `.partial` directory, validates its SHA-256 and configuration, then publishes an immutable `checkpoints/group-XXXXX/` directory.
+5. Uploads shared topology/features once, then one bounded batch group at a time in epoch order.
+6. Reads the mounted dataset directly and allows trusted containers to be reused, reloading volume changes before each call.
+7. Downloads each group's checkpoint and metrics into a `.partial` directory, validates its SHA-256 and configuration, then publishes an immutable `checkpoints/group-XXXXX/` directory for epoch zero or `checkpoints/epoch-XXXXX/group-XXXXX/` for later epochs.
 8. Atomically records the completed group in `progress.parquet`, updates the latest checkpoint pointers, and uploads that checkpoint before starting the next group.
 9. Removes uploaded batch files and remote outputs, then destroys the ephemeral volume in `finally`.
 
-`progress.parquet` contains `run_id`, `group_index`, `batch_start`, `batch_end` (exclusive), `epoch`, `cursor`, `config_sha256`, `checkpoint_path`, and `checkpoint_sha256`. Only contiguous completed rows count as progress; temporary files and unpublished checkpoint directories do not. Root `checkpoint.pt`, `checkpoint.sha256`, and `checkpoint.json` are replaceable pointers to the latest completed group. Model, optimizer, and RNG state remain coupled in the PyTorch checkpoint, not in a second Safetensors representation.
+`progress.parquet` contains `run_id`, `group_index`, `batch_start`, `batch_end` (exclusive), `epoch`, `cursor`, `config_sha256`, `checkpoint_path`, and `checkpoint_sha256`. Rows form contiguous `(epoch, group)` steps across the requested epochs. Only completed rows count as progress; temporary files and unpublished checkpoint directories do not. Root `checkpoint.pt`, `checkpoint.sha256`, and `checkpoint.json` are replaceable pointers to the latest completed group. Model, optimizer, and RNG state remain coupled in the PyTorch checkpoint, not in a second Safetensors representation.
 
-Resume continues the same run directory. It validates the run identity, configuration, ledger, and latest immutable checkpoint before paid confirmation, skips ledger-complete groups, and keeps group-local offsets separate from global checkpoint cursors. A failure inside a group repeats that group from the previous completed checkpoint; it does not repeat earlier groups. Keep the dataset, seed, and batch-group plan unchanged when resuming. Legacy checkpoint-only or `progress.json` runs are not automatically migrated.
+Resume continues the same run directory. It validates the run identity, configuration, ledger, and latest immutable checkpoint before paid confirmation, skips ledger-complete groups, and keeps group-local offsets separate from global checkpoint cursors. A failure inside a group repeats that group from the previous completed checkpoint; it does not repeat earlier groups. Keep the dataset, seed, and batch-group plan unchanged when resuming. Increasing `epochs` extends the same ledger; decreasing it below recorded progress is rejected. Legacy checkpoint-only or `progress.json` runs are not automatically migrated.
 
 ```sh
 ced train <dataset-id> --resume <run-id> --seed <original-seed> --yes

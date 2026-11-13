@@ -376,6 +376,7 @@ def train_batches(
     checkpoint_path: Path | None = None,
     device: Device = "auto",
     selected_indices: Sequence[int] | None = None,
+    start_epoch: int = 0,
     start_cursor: int = 0,
     global_cursor: int | None = None,
     max_batches: int | None = None,
@@ -407,12 +408,13 @@ def train_batches(
         auxiliary_weight=auxiliary_weight,
         attribute_weight=attribute_weight,
     )
+    requested_start_epoch = start_epoch
     requested_start_cursor = start_cursor
     metrics: dict[str, float] = {"loss": 0.0, "batches": 0.0}
     total = 0.0
     trained = 0
     reductions = 0
-    start_epoch = 0
+    start_epoch = requested_start_epoch
     start_cursor = 0
     restored: dict[str, Any] | None = None
     if checkpoint_path is not None and checkpoint_path.is_file():
@@ -425,8 +427,10 @@ def train_batches(
         metrics = dict(restored["metrics"])
         total = float(metrics.get("loss", 0.0)) * float(metrics.get("batches", 0.0))
         trained = int(metrics.get("batches", 0.0))
-        start_epoch = int(restored["epoch"])
-        start_cursor = int(restored["cursor"])
+        reductions = int(metrics.get("reductions", 0.0))
+        if selected_indices is None:
+            start_epoch = int(restored["epoch"])
+            start_cursor = int(restored["cursor"])
         random.setstate(restored["rng"]["python"])
         np.random.set_state(restored["rng"]["numpy"])
         torch.set_rng_state(restored["rng"]["torch"])
@@ -482,8 +486,11 @@ def train_batches(
 
     if selected_indices is not None:
         if restored:
+            restored_epoch = int(restored["epoch"])
+            if restored_epoch > start_epoch:
+                raise ValueError(f"checkpoint epoch {restored_epoch} exceeds requested epoch {start_epoch}")
             restored_global_cursor = int(restored["cursor"])
-            if global_cursor is not None and restored_global_cursor != global_cursor:
+            if restored_epoch == start_epoch and global_cursor is not None and restored_global_cursor != global_cursor:
                 raise ValueError(
                     f"checkpoint global cursor {restored_global_cursor} does not match group start {global_cursor}"
                 )

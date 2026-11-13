@@ -10,10 +10,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+import torch
 
 from ced.acquisition.base import sha256_file
 from ced.config.models import ModalSettings, RuntimeConfig
 from ced.modal_plan import TransferPlan, _retry, dataset_transfer_plan, execute_plan, prepare_run_directory
+from ced.model.training import train_batches
 
 
 class FakeVolume:
@@ -62,7 +64,7 @@ class FakeRunner:
         global_start = int(payload.get("global_cursor", (min(selected) if selected else 0) + start))
         consumed = len(selected) - start
         metrics = {
-            "epoch": 0.0,
+            "epoch": float(payload.get("start_epoch", 0)),
             "cursor": global_start + consumed,
             "consumed": float(consumed),
             "batches": float(consumed),
@@ -71,7 +73,7 @@ class FakeRunner:
         }
         checkpoint = f"checkpoint-{metrics['cursor']}".encode()
         metadata = {
-            "epoch": 0,
+            "epoch": int(payload.get("start_epoch", 0)),
             "cursor": metrics["cursor"],
             "config_hash": payload.get("config_sha256", "test-config"),
             "metrics": metrics,
@@ -83,6 +85,50 @@ class FakeRunner:
             f"{hashlib.sha256(checkpoint).hexdigest()}  checkpoint.pt\n".encode()
         )
         self.volume.files[f"{prefix}/checkpoint.json"] = json.dumps(metadata).encode()
+        return metrics
+
+
+class TrainingRunner:
+    """Execute real training with only the files visible in one Modal group."""
+
+    def __init__(self, volume: FakeVolume, root: Path) -> None:
+        self.volume = volume
+        self.root = root
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def stream(self, function: str, payload: dict[str, Any]):
+        raise AssertionError("stream is only used by encoding test runners")
+
+    def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]:
+        assert function == "train_group"
+        call_root = self.root / f"call-{len(self.calls)}"
+        self.calls.append((function, payload))
+        root = call_root / "dataset"
+        for name, value in self.volume.files.items():
+            if name.startswith("dataset/"):
+                path = call_root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(value)
+        checkpoint = call_root / "checkpoint.pt"
+        if "checkpoint.pt" in self.volume.files:
+            checkpoint.write_bytes(self.volume.files["checkpoint.pt"])
+        options = {key: payload[key] for key in ("start_epoch", "edge_type_count") if key in payload}
+        metrics = train_batches(
+            root,
+            epochs=payload["epochs"],
+            seed=payload["seed"],
+            checkpoint_path=checkpoint,
+            device="cpu",
+            selected_indices=payload["selected_indices"],
+            start_cursor=payload["start_cursor"],
+            global_cursor=payload["global_cursor"],
+            max_batches=payload["max_batches"],
+            **options,
+        )
+        prefix = str(payload["output_prefix"]).removeprefix("/data/")
+        self.volume.files[f"{prefix}/metrics.json"] = json.dumps(metrics).encode()
+        for name in ("checkpoint.pt", "checkpoint.sha256", "checkpoint.json"):
+            self.volume.files[f"{prefix}/{name}"] = (call_root / name).read_bytes()
         return metrics
 
 
@@ -105,6 +151,8 @@ def test_modal_plan_rotates_bounded_batches(tmp_path: Path, synthetic_dataset: C
     plan = dataset_transfer_plan(root, config, "train")
     assert [group.indices for group in plan.groups] == [[0, 1], [2]]
     assert plan.shared_bytes <= config.modal.max_shared_bytes
+    assert plan.edge_type_count == 2
+    assert config.modal.single_use_containers is False
 
     run_root = tmp_path / "run"
     run_root.mkdir()
@@ -317,6 +365,94 @@ def test_training_resume_rejects_non_contiguous_progress(tmp_path: Path, synthet
     with pytest.raises(ValueError, match="missing, duplicated, or out of order"):
         execute_plan(plan, config, runner.volume, runner, run_root, seed=7)
     assert runner.calls == []
+
+
+def test_modal_grouped_training_matches_full_epochs_and_resume(
+    tmp_path: Path, synthetic_dataset: Callable[..., int]
+) -> None:
+    import pyarrow.parquet as pq
+
+    root = tmp_path / "dataset"
+    batch_bytes = synthetic_dataset(root, batches=3)
+    expected_checkpoint = tmp_path / "expected.pt"
+    expected = train_batches(root, epochs=2, seed=7, checkpoint_path=expected_checkpoint, device="cpu")
+    config = runtime(tmp_path, max_shared_bytes=1024**3, max_batch_group_bytes=batch_bytes * 2 + 16)
+    plan = dataset_transfer_plan(root, config, "train")
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+
+    first_volume = FakeVolume()
+    first_runner = TrainingRunner(first_volume, tmp_path / "first-remote")
+    first = execute_plan(plan, config, first_volume, first_runner, run_root, epochs=1, seed=7)
+    assert first["batches"] == 3
+    assert first["epoch"] == 1
+    assert [payload["start_epoch"] for _, payload in first_runner.calls] == [0, 0]
+
+    class FailLaterSecondGroup(TrainingRunner):
+        def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]:
+            if payload["start_epoch"] == 1 and payload["selected_indices"] == [2]:
+                raise RuntimeError("injected later-epoch failure")
+            return super().call(function, payload)
+
+    failing_volume = FakeVolume()
+    failing_runner = FailLaterSecondGroup(failing_volume, tmp_path / "failing-remote")
+    with pytest.raises(RuntimeError, match="injected later-epoch failure"):
+        execute_plan(plan, config, failing_volume, failing_runner, run_root, epochs=2, seed=7)
+    assert pq.read_table(run_root / "progress.parquet").num_rows == 3
+
+    resumed_volume = FakeVolume()
+    resumed_runner = TrainingRunner(resumed_volume, tmp_path / "resumed-remote")
+    resumed = execute_plan(plan, config, resumed_volume, resumed_runner, run_root, epochs=2, seed=7)
+    assert resumed["batches"] == expected["batches"] == 6
+    assert resumed["loss"] == expected["loss"]
+    assert resumed["epoch"] == 2
+    assert resumed["groups"] == 4
+    assert [payload["start_epoch"] for _, payload in resumed_runner.calls] == [1]
+    assert [payload["global_cursor"] for _, payload in resumed_runner.calls] == [2]
+    progress = pq.read_table(run_root / "progress.parquet")
+    assert progress.column("epoch").to_pylist() == [0, 0, 1, 1]
+    assert progress.column("checkpoint_path").to_pylist()[-2:] == [
+        "checkpoints/epoch-00001/group-00000/checkpoint.pt",
+        "checkpoints/epoch-00001/group-00001/checkpoint.pt",
+    ]
+    actual_state = torch.load(run_root / "checkpoint.pt", map_location="cpu", weights_only=False)["state"]
+    expected_state = torch.load(expected_checkpoint, map_location="cpu", weights_only=False)["state"]
+    assert actual_state.keys() == expected_state.keys()
+    for name in expected_state:
+        assert torch.equal(actual_state[name], expected_state[name]), name
+
+    rejected_runner = FakeRunner(FakeVolume())
+    with pytest.raises(ValueError, match="progress exceeds the requested epochs"):
+        execute_plan(plan, config, rejected_runner.volume, rejected_runner, run_root, epochs=1, seed=7)
+    assert rejected_runner.calls == []
+
+
+def test_training_rejects_non_positive_epochs(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
+    root = tmp_path / "dataset"
+    synthetic_dataset(root, batches=1)
+    config = runtime(tmp_path)
+    plan = dataset_transfer_plan(root, config, "train")
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    volume = FakeVolume()
+    runner = FakeRunner(volume)
+    with pytest.raises(ValueError, match="epochs must be positive"):
+        execute_plan(plan, config, volume, runner, run_root, epochs=0, seed=7)
+    assert not volume.files
+    assert runner.calls == []
+
+
+def test_transfer_plan_requires_shard_metadata(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
+    root = tmp_path / "dataset"
+    synthetic_dataset(root, batches=1)
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    tensor_path = manifest["batches"][0]["graph"]["edge_type_id"]["path"]
+    (root / tensor_path).unlink()
+    del manifest["checksums"][tensor_path]
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(FileNotFoundError):
+        dataset_transfer_plan(root, runtime(tmp_path), "train")
 
 
 def test_modal_plan_rejects_oversized_batch(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
