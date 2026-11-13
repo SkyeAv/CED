@@ -1,0 +1,54 @@
+template:
+  source:
+    kind: text
+    local: ./src/ced/graphs/data/placeholder.tsv
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC6049015/
+    delimiter: /t
+  statement:
+    subject:
+      method: value
+      prioritize:
+      - PopulationOfIndividualOrganisms
+      taxon_from: species_context_qualifier
+    predicate: has_phenotype
+    object:
+      method: value
+      encoding: blepharoptosis
+      prioritize:
+      - PhenotypicFeature
+      taxon_from: species_context_qualifier
+    qualifiers:
+    - qualifier: species_context_qualifier
+      method: value
+      encoding: homo sapiens
+      prioritize:
+      - OrganismTaxon
+    - qualifier: disease_context_qualifier
+      method: value
+      encoding: camurati-englemann disease
+      prioritize:
+      - Disease
+  provenance:
+    repo: PMC
+    publication: PMC6049015
+  annotations:
+  - annotation: study_size
+    method: value
+  - annotation: effect_size
+    method: value
+  - annotation: effect_type
+    method: value
+    encoding: odds_ratio
+  - annotation: supporting_text
+    method: value
+sections:
+- statement:
+    subject:
+      encoding: Case_Report_PMC6049015
+  annotations:
+  - annotation: study_size
+    encoding: 1
+  - annotation: effect_size
+    encoding: 1.0
+  - annotation: supporting_text
+    encoding: proptosis and blepharoptosis

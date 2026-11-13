@@ -1,7 +1,9 @@
 import json
+import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 from ced.config.models import RuntimeConfig
 from ced.config.sources import load_sources
@@ -25,7 +27,7 @@ def test_local_identity_is_stable_and_scoped() -> None:
 
 def test_all_family_and_book_sections_validate(tmp_path: Path) -> None:
     _, sections = adapter(tmp_path).sections()
-    assert len(sections) == 612
+    assert len(sections) == 1422  # 612 family/book + 810 case-report sections
     custom = 0
     for section in sections:
         tcode = section.tcode
@@ -39,7 +41,31 @@ def test_all_family_and_book_sections_validate(tmp_path: Path) -> None:
             custom += 1
             assert tcode.statement.predicate == "related_to"
             assert lineage["ced_predicate"] == "ced:has_mutation"
-    assert custom == 70
+    assert custom == 121  # 70 family + 51 case-report has_mutation sections
+
+
+def test_case_report_tables_are_single_documents_with_own_provenance() -> None:
+    files = sorted(Path("src/ced/graphs/tables/case-reports").glob("PMC*/*.yaml"))
+    assert len(files) == 810
+    for path in files:
+        pmcid = path.parent.name
+        table = yaml.safe_load(path.read_text(encoding="utf-8"))  # raises on multi-document files
+        assert table["template"]["provenance"] == {"repo": "PMC", "publication": pmcid}
+        assert table["template"]["source"]["url"] == f"https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/"
+        assert len(table["sections"]) == 1
+        statement = table["sections"][0]["statement"]
+        predicate = table["template"]["statement"]["predicate"]
+        case = statement["object"] if predicate == "affects" else statement.get("subject")
+        if predicate == "applied_to_treat":
+            case = statement["qualifiers"][0]
+        assert case["encoding"] == f"Case_Report_{pmcid}"
+        values = {a["annotation"]: a["encoding"] for a in table["sections"][0]["annotations"]}
+        assert values["study_size"] >= 1
+        if "effect_size" in values:
+            assert 0 <= values["effect_size"] <= 1
+            affected = values["effect_size"] * values["study_size"]
+            assert abs(affected - round(affected)) < 0.01
+    assert not re.search(r"^---", "".join(f.read_text(encoding="utf-8") for f in files), re.M)
 
 
 @pytest.mark.fullmap
