@@ -18,6 +18,7 @@ import pytest
 
 from ced.model.batches import sample_neighborhood
 from ced.model.disk_graph import DiskGraph
+from ced.model.shards import missing_supervision, write_batch_shards
 
 
 def _hub_fixture() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -138,3 +139,49 @@ def test_required_injection_respects_node_limit() -> None:
         sample_neighborhood(
             edges, relations, splits, np.array([50]), fanout=[3], seed=1, node_limit=2, required=np.array([0])
         )
+
+
+def test_missing_supervision_helper() -> None:
+    # Membership is exact and order-preserving; statement_id holds each statement
+    # twice (forward and reverse messages), which must not confuse the check.
+    assert missing_supervision(
+        np.array([1, 2, 3], dtype=np.int64), np.array([1, 3, 1, 3], dtype=np.int64)
+    ).tolist() == [2]
+    assert missing_supervision(np.array([0, 1], dtype=np.int64), np.array([0, 1, 0, 1], dtype=np.int64)).size == 0
+    assert missing_supervision(np.array([], dtype=np.int64), np.array([0], dtype=np.int64)).size == 0
+
+
+def test_shard_writer_raises_when_supervision_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Injection normally makes missing supervision impossible, so the writer guard
+    # is a corruption alarm; faking a sampler that drops statement 1 proves the
+    # alarm fires with the batch directory name instead of writing a dead batch.
+    from ced.config.models import BatchSettings, RuntimeConfig, SplitSettings
+    from ced.model.batches import SampledNeighborhood
+    from ced.model.shards import sample_neighborhood as real_sample
+
+    edges = np.array([[0, 0, 1, 2], [1, 2, 3, 3]], dtype=np.int64)
+    relations = np.array([0, 1, 0, 1], dtype=np.int64)
+    splits = np.zeros(4, dtype=np.int8)
+    types = np.arange(6, dtype=np.int64)
+    arrays = {"head": edges[0], "tail": edges[1], "relation_id": relations, "split": splits, "type_set_id": types}
+
+    def drop_statement_one(edge_index, relations, splits, seeds, **kwargs):
+        result = real_sample(edge_index, relations, splits, seeds, **kwargs)
+        keep = result.statement_id != 1
+        return SampledNeighborhood(
+            global_node_id=result.global_node_id,
+            edge_index=result.edge_index[:, keep],
+            statement_id=result.statement_id[keep],
+            relation_id=result.relation_id[keep],
+            edge_type_id=result.edge_type_id[keep],
+        )
+
+    monkeypatch.setattr("ced.model.shards.sample_neighborhood", drop_statement_one)
+    runtime = RuntimeConfig(
+        remote_project=tmp_path,
+        artifact_root=tmp_path / ".ced",
+        split=SplitSettings(seed=19, negatives=2),
+        batch=BatchSettings(node_limit=32, neighbor_fanout=[3, 2]),
+    )
+    with pytest.raises(ValueError, match=r"train batch train-000000000 lost supervision statements: \[1\]"):
+        write_batch_shards(tmp_path / "dataset", arrays, runtime)

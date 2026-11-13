@@ -50,6 +50,19 @@ def _positive_triples(
     )
 
 
+def missing_supervision(positive: np.ndarray, statement_id: np.ndarray) -> np.ndarray:
+    """Return supervision statement ids absent from a batch's message-passing set.
+
+    Neighborhood injection guarantees every train supervision statement survives
+    sampling, so any absence is data corruption rather than a routine event; the
+    shard writer raises on it instead of writing a batch that would silently train
+    on nothing.
+    """
+    if positive.size == 0:
+        return np.empty(0, dtype=np.int64)
+    return positive[~np.isin(positive, statement_id)]
+
+
 def write_batch_shards(
     root: Path, arrays: Mapping[str, np.ndarray], runtime: RuntimeConfig, *, in_memory: bool = True
 ) -> list[TrainingExample]:
@@ -120,6 +133,10 @@ def write_batch_shards(
                     edge_types=edge_types,
                     required=required,
                 )
+            if label == "train":
+                absent = missing_supervision(positive, neighborhood.statement_id)
+                if absent.size:
+                    raise ValueError(f"train batch {label}-{start:09d} lost supervision statements: {absent.tolist()}")
             directory = root / "batches" / f"{label}-{start:09d}"
             directory.mkdir(parents=True)
 
