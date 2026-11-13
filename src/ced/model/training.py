@@ -18,8 +18,16 @@ from ced.model.dense_features import RandomProjectionProvider, SemanticFeaturePr
 from ced.model.encoder import RelationalAttentionEncoder
 from ced.model.feature_index import FeatureIndex, load_feature_metadata
 from ced.model.losses import AuxiliaryAttributeDecoder, auxiliary_loss, link_loss
-from ced.model.schemas import GraphBatch, PublicationFeatureStore, SemanticFeatureStore, TensorRef, TrainingExample
+from ced.model.schemas import (
+    GraphBatch,
+    PublicationFeatureStore,
+    SemanticFeatureStore,
+    StatementAttributeStore,
+    TensorRef,
+    TrainingExample,
+)
 from ced.model.semantic import SemanticFeatureProvider as StatementSemanticFeatureProvider
+from ced.model.statement_features import StatementAttributeProvider
 
 Device = Literal["auto", "cpu", "cuda"]
 
@@ -108,11 +116,15 @@ def build_model(document: dict[str, Any], root: Path, edge_type_count: int, seed
     relation_count = document["relations"]
     counts, numeric = load_feature_metadata(root)
     torch.manual_seed(seed)
+    features: FeatureProvider
     encoder = RelationalAttentionEncoder(32, 16, edge_type_count)
     decoder = ComplexDecoder(32, relation_count)
     attributes = AuxiliaryAttributeDecoder(32, counts, numeric)
     features: FeatureProvider
-    if document.get("semantic"):
+    if document.get("statement_attributes"):
+        store = StatementAttributeStore.model_validate(document["statement_attributes"])
+        features = StatementAttributeProvider(32, 16, relation_count, seed, store, root)
+    elif document.get("semantic"):
         store = SemanticFeatureStore.model_validate(document["semantic"])
         features = StatementSemanticFeatureProvider(32, 16, relation_count, seed, store, root)
     else:
@@ -144,7 +156,7 @@ def config_hash(
     learning_rate: float,
     seed: int,
     auxiliary_weight: float,
-    semantic_weight: float = 0.1,
+    attribute_weight: float = 0.1,
 ) -> str:
     payload = {
         "dataset_id": document.get("dataset_id"),
@@ -155,11 +167,11 @@ def config_hash(
         "publication_feature_key": (document.get("publications") or {}).get("feature_key"),
         "model_version": 3,
     }
-    if document.get("semantic"):
+    if document.get("statement_attributes"):
         payload.update(
             model_version=3,
-            semantic_weight=semantic_weight,
-            semantic=document["semantic"],
+            attribute_weight=attribute_weight,
+            statement_attributes=document["statement_attributes"],
         )
     dense = document.get("features", {}).get("dense")
     if dense is not None:
@@ -245,7 +257,7 @@ def train_step(
     *,
     device: torch.device,
     auxiliary_weight: float,
-    semantic_weight: float = 0.1,
+    attribute_weight: float = 0.1,
     memory_reduction: int = 1,
     use_bf16: bool = False,
 ) -> float:
@@ -297,7 +309,7 @@ def train_step(
         loss = link_loss(scores, targets)
         reconstruction = model.features.reconstruction_loss(relations, positive)
         if reconstruction is not None:
-            loss = loss + semantic_weight * reconstruction
+            loss = loss + attribute_weight * reconstruction
         if features is not None:
             states, categorical_fields, categorical_targets, numeric_fields, numeric_values, numeric_valid = (
                 _auxiliary_tensors(features, state, global_nodes, positive)
@@ -343,15 +355,15 @@ def train_batches(
     start_cursor: int = 0,
     max_batches: int | None = None,
     auxiliary_weight: float = 0.1,
-    semantic_weight: float = 0.1,
+    attribute_weight: float = 0.1,
     edge_type_count: int | None = None,
     max_memory_reductions: int = 4,
 ) -> dict[str, Any]:
-    if semantic_weight < 0:
-        raise ValueError("semantic weight must be nonnegative")
     document = json.loads((root / "manifest.json").read_text())
     examples = [TrainingExample.model_validate(item) for item in document["batches"]]
     resolved_device = resolve_device(device)
+    if attribute_weight < 0:
+        raise ValueError("attribute weight must be nonnegative")
     if edge_type_count is None:
         edge_type_count = 1 + max(
             int(_load(example.graph.edge_type_id, root, torch.device("cpu")).max()) for example in examples
@@ -368,7 +380,7 @@ def train_batches(
         learning_rate=learning_rate,
         seed=seed,
         auxiliary_weight=auxiliary_weight,
-        semantic_weight=semantic_weight,
+        attribute_weight=attribute_weight,
     )
     metrics: dict[str, float] = {"loss": 0.0, "batches": 0.0}
     total = 0.0
@@ -422,7 +434,7 @@ def train_batches(
                         features,
                         device=resolved_device,
                         auxiliary_weight=auxiliary_weight,
-                        semantic_weight=semantic_weight,
+                        attribute_weight=attribute_weight,
                         memory_reduction=reduction,
                         use_bf16=use_bf16,
                     )

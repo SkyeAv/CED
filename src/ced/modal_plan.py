@@ -110,6 +110,8 @@ def dataset_transfer_plan(root: Path, runtime: RuntimeConfig, mode: str) -> Tran
     validate_checksums(root, manifest["checksums"])
     shared_names: set[str] = set(SHARED_TRAINING_FILES if mode == "train" else SHARED_EVALUATION_FILES)
     shared: dict[str, Path] = {}
+    for item in _tensor_paths(manifest.get("statement_attributes", {})):
+        shared_names.add(item)
     if mode == "train":
         for item in _tensor_paths(manifest.get("features", {})):
             shared_names.add(item)

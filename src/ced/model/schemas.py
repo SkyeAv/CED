@@ -233,6 +233,50 @@ class SemanticFeatureStore(ConfigBase):
         return self
 
 
+class StatementAttributeStore(ConfigBase):
+    """Per-statement edge attributes: embedded categorical values and z-scored numerics.
+
+    ``categorical_id``/``categorical_indptr`` form a CSR over all dataset statements
+    whose data rows hold ids into the ``categorical_vectors`` text-embedding
+    vocabulary. ``numeric_field_id``/``numeric_value``/``numeric_valid`` form a CSR
+    of sparse numeric entries per statement, with dense local field columns over
+    the sorted fitted statement numeric fields.
+    """
+
+    provider: str
+    model: str
+    encoder_key: str
+    dimension: int = Field(gt=0)
+    statement_count: int = Field(ge=0)
+    categorical_count: int = Field(ge=0)
+    numeric_fields: int = Field(ge=0)
+    categorical_vectors: TensorRef
+    categorical_id: TensorRef
+    categorical_indptr: TensorRef
+    numeric_value: TensorRef
+    numeric_field_id: TensorRef
+    numeric_valid: TensorRef
+    numeric_indptr: TensorRef
+
+    @model_validator(mode="after")
+    def attribute_shapes(self) -> StatementAttributeStore:
+        if self.categorical_vectors.shape != [self.categorical_count, self.dimension]:
+            raise ValueError("statement categorical vectors do not match the vocabulary")
+        if self.categorical_indptr.shape != [self.statement_count + 1]:
+            raise ValueError("statement categorical CSR does not match the dataset")
+        if len(self.categorical_id.shape) != 1:
+            raise ValueError("statement categorical ids must be a vector")
+        numeric_columns = (self.numeric_value, self.numeric_field_id, self.numeric_valid)
+        if (
+            any(len(reference.shape) != 1 for reference in numeric_columns)
+            or len({tuple(reference.shape) for reference in numeric_columns}) != 1
+        ):
+            raise ValueError("statement numeric tensors must be aligned vectors")
+        if self.numeric_indptr.shape != [self.statement_count + 1]:
+            raise ValueError("statement numeric CSR does not match the dataset")
+        return self
+
+
 class PublicationFeatureStore(ConfigBase):
     repo_id: str
     revision: str = Field(pattern=r"^[0-9a-f]{40}$")
@@ -263,7 +307,6 @@ class DatasetManifest(ConfigBase):
     dataset_id: str
     snapshot_id: str
     seed: int
-    pruning: IsolationTreePruningReport | None = None
     fit_split: Literal["train", "all"] = "train"
     entities: int = Field(gt=0)
     relations: int = Field(gt=0)
@@ -271,8 +314,10 @@ class DatasetManifest(ConfigBase):
     tensors: dict[str, TensorRef]
     feature_fields: list[FeatureFieldSpec] = Field(default_factory=list)
     features: FeatureStoreArtifact = Field(default_factory=FeatureStoreArtifact)
+    pruning: IsolationTreePruningReport | None = None
     semantic: SemanticFeatureStore | None = None
     publications: PublicationFeatureStore | None = None
+    statement_attributes: StatementAttributeStore | None = None
     batches: list[TrainingExample] = Field(default_factory=list)
     vocabularies: dict[str, VocabularyArtifact] = Field(default_factory=dict)
     checksums: dict[str, str] = Field(default_factory=dict)
@@ -289,9 +334,8 @@ class DatasetManifest(ConfigBase):
         for key, shape in expected.items():
             if key not in self.tensors or self.tensors[key].shape != shape:
                 raise ValueError(f"unaligned topology tensor: {key}")
-        if self.semantic is not None:
-            if self.semantic.relations != self.relations:
-                raise ValueError("semantic relation count does not match the dataset")
-            if self.semantic.statement_qualifiers.indptr.shape != [self.statements + 1]:
-                raise ValueError("statement qualifier CSR does not match the dataset")
+        if self.semantic is not None and self.semantic.relations != self.relations:
+            raise ValueError("semantic relation count does not match the dataset")
+        if self.statement_attributes is not None and self.statement_attributes.statement_count != self.statements:
+            raise ValueError("statement attribute count does not match the dataset")
         return self
