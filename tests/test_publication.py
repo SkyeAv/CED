@@ -294,3 +294,23 @@ def test_invalid_artifacts_fail_before_network(runtime: RuntimeConfig, api: Fake
         publication.publish_dataset(runtime, dataset)
     assert api.repos == []
     assert api.folders == []
+
+
+def test_unresolved_license_blocks_snapshot_publish(runtime: RuntimeConfig, api: FakeApi) -> None:
+    """A source integrated before its redistribution terms are confirmed must not publish.
+
+    `clinical-trials.yaml` records `license_name: Not specified by producer; ...` until terms
+    are confirmed. `publish_snapshot` refuses rather than relying on a README reminder, since
+    a bare `ced build` selects every enabled source and uploads by default.
+    """
+    root = write_snapshot(runtime)
+    manifest = json.loads((root / "manifest.json").read_text())
+    manifest["sources"] = [
+        {"source_id": "chembl", "license_name": "CC0"},
+        {"source_id": "clinical-trials", "license_name": "Not specified by producer; confirm redistribution terms"},
+    ]
+    atomic_write_json(root / "manifest.json", manifest)
+    with pytest.raises(ValueError, match="unresolved source licenses: clinical-trials"):
+        publication.publish_snapshot(runtime, root)
+    assert api.repos == []
+    assert api.folders == []

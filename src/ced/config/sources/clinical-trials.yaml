@@ -1,0 +1,29 @@
+# v4.2.6 is intentional: do not upgrade to v4.2.7 (producer bug reported by user).
+schema_version: 1
+name: clinical-trials
+enabled: true
+adapter: clinical_trials
+groups: [clinical-trials]
+acquisition:
+  backend: http
+  connections: 4
+provenance:
+  title: ISB Clinical Trials KG
+  description: Clinical trial interventions, conditions, and associations, release 4.2.6.
+  homepage: https://db.systemsbiology.net/gestalt/KG/
+  license_name: Not specified by producer; confirm redistribution terms before publishing
+  provided_by: infores:clinicaltrials-kp
+  citations: ['ISB Clinical Trials KG v4.2.6', 'AACT', 'ClinicalTrials.gov']
+artifacts:
+  - path: clinical_trials_kg_nodes_v4.2.6.jsonl.gz
+    role: nodes
+    urls: ['https://db.systemsbiology.net/gestalt/KG/clinical_trials_kg_nodes_v4.2.6.jsonl.gz']
+    size: 27620565
+    sha256: 42681445f7893b72090bc37efa3a6dde8fbca51c6743b5e1e05dcb5b2c30700a
+  - path: clinical_trials_kg_edges_v4.2.6.jsonl.gz
+    role: edges
+    urls: ['https://db.systemsbiology.net/gestalt/KG/clinical_trials_kg_edges_v4.2.6.jsonl.gz']
+    size: 56278921
+    sha256: 666b75cd62b57968968dde4c18bbd1050802d8f86fd5e8f3d404aeca9bc23caf
+mapping:
+  schema_relations: ['CED:trial_has_intervention', 'CED:trial_has_condition']

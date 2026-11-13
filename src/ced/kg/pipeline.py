@@ -14,6 +14,7 @@ from ced.acquisition.pipeline import SourceArtifacts, locate_source
 from ced.config.models import RuntimeConfig
 from ced.config.sources import SourceConfig, load_sources, select_sources
 from ced.kg.adapters.amalgam_compact import AmalgamCompactAdapter
+from ced.kg.adapters.clinical_trials import ClinicalTrialsAdapter
 from ced.kg.adapters.kgx_ndjson import KgxNdjsonAdapter
 from ced.kg.adapters.tablassert import TablassertAdapter
 from ced.kg.audit import write_reports
@@ -96,6 +97,8 @@ def canonicalize_source(job: CanonicalizationJob) -> dict[str, int]:
                 if metadata.name == "ontology.yaml":
                     writer.write(amalgam_ontology(metadata))
             adapter = AmalgamCompactAdapter(job.located, job.spill_root)
+        elif source.adapter == "clinical_trials":
+            adapter = ClinicalTrialsAdapter(job.located)
         else:
             adapter = KgxNdjsonAdapter(job.located)
         try:
@@ -138,7 +141,7 @@ def build_graph(
     selected = select_sources(
         load_sources(runtime.source_directory), names, all_enabled=not names and not groups, groups=groups
     )
-    supported = {"tablassert", "kgx_ndjson", "amalgam_compact"}
+    supported = {"tablassert", "kgx_ndjson", "amalgam_compact", "clinical_trials"}
     for source in selected:
         if source.adapter not in supported:
             raise ValueError(f"unsupported adapter: {source.adapter}")
