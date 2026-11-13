@@ -111,6 +111,18 @@ Adding a compatible KGX, Translator-release, Hugging Face, direct-URL, archive, 
 
 Source YAML owns URLs, artifact selection, field mappings, licenses, and source-specific semantics. Python owns reusable acquisition, canonical records, merging, tensors, and models.
 
+### Clinical Trials KG
+
+`ced fetch --source clinical-trials` selects the checksum-pinned ISB v4.2.6 nodes and edges. It is a separate source group, not a duplicate of the Translator `multiomics` release.
+
+Use `ced build --source clinical-trials --no-upload` until the producer's redistribution terms are confirmed. The supplied files do not declare a license, so `publication.publish_snapshot` now refuses to upload any snapshot whose `license_name` still starts with `Not specified` (`src/ced/publication.py`); this is enforced in code, not just documented here. The adapter streams gzip JSONL and preserves bare `NaN` values as nonfinite attribute events, not zeros. Missing trial categories become `biolink:ClinicalTrial`; existing identifiers, predicates, qualifiers, study references, mapping evidence, and source chains remain unchanged.
+
+Explicit intervention/condition memberships become `CED:trial_has_intervention` and `CED:trial_has_condition` schema edges (`relation_role="schema"`, never prediction targets), while the producer's own `biolink:in_clinical_trials_for`/`biolink:treats` edges stay target-eligible, matching every other KGX source. They describe registry membership, not treatment efficacy. `has_supporting_studies` remains statement evidence under its original name in the attributes table (see `StatementRecord.publications` below for its embedding role). `provenance_ref` is retained, but its separately hosted TSV is not fetched by this source.
+
+Isolated-tree pruning (`src/ced/model/pruning.py`) is a general graph policy, not clinical-trials specific: a trial node whose only member is itself unconnected elsewhere would be pruned like any other 2-node tree. Verified against the real v4.2.6 payload, this shape does not occur - every one of the 22,720 members referenced by exactly one trial also appears in at least one producer edge, so no NCT node is at risk of pruning in practice. No special-case exemption was added, since it would be dead code for this dataset.
+
+`CLINICALTRIALS:NCT...` IDs and trial titles remain available to text encoders, and the producer's `has_supporting_studies` values are mapped onto statement `publications` (dataset-local `CLINICALTRIALS:` CURIE prefix stripped) so the already-merged `ced encode-publications` MedCPT pipeline resolves them as `NCT...` evidence embeddings without further changes. This integration does not fetch trial abstracts or install MedCPT; the pinned `glusman-team/medcpt-ae` artifact covers the NCT ids natively.
+
 ## Hugging Face publication
 
 `ced build`, `ced prepare`, and `ced encode-text` publish to `SkyeAv/ced` by default; pass `--no-upload` to keep artifacts local. Build uploads the complete post-QC snapshot to `graph/<snapshot-id>`, including isolated trees, canonical tables, KGX exports, provenance, checksums, and reports, while excluding raw staging and spill files. Preparation and text encoding upload to `encoded/<dataset-id>`, including the isolated-tree pruning report, Parquet topology/features, safetensors, batch shards, and the portable `text-<encoder>/` artifact, whose manifest is retained per encoder as an immutable copy.

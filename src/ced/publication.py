@@ -14,6 +14,31 @@ from ced.model.schemas import DenseFeatureStore
 from ced.preflight import require_cpu_worker
 
 REPO_ID = "SkyeAv/ced"
+UNRESOLVED_LICENSE_PREFIX = "Not specified"
+
+
+def _require_resolved_licenses(sources: list[dict[str, Any]]) -> None:
+    """Refuse to publish a snapshot whose sources still carry a placeholder license.
+
+    `SourceConfig.provenance.license_name` is free text; a source integrated before its
+    redistribution terms are confirmed records a value starting with
+    ``UNRESOLVED_LICENSE_PREFIX``. Publishing such a snapshot to a public Hub repo could
+    violate the producer's terms, so this fails loudly instead of relying on a README
+    reminder. Resolve the license in the source YAML (and add ``license_url``) to clear it.
+    """
+    unresolved = sorted(
+        source.get("source_id", "<unknown>")
+        for source in sources
+        if str(source.get("license_name", "")).startswith(UNRESOLVED_LICENSE_PREFIX)
+    )
+    if unresolved:
+        raise ValueError(
+            "refusing to publish snapshot with unresolved source licenses: "
+            f"{', '.join(unresolved)}. Confirm redistribution terms and update license_name/license_url "
+            "in the source YAML, or publish with --no-upload."
+        )
+
+
 GRAPH_TABLES = (
     "nodes",
     "statements",
@@ -152,6 +177,8 @@ def _card(api: HfApi, runtime: RuntimeConfig, message: str) -> None:
 
 def publish_snapshot(runtime: RuntimeConfig, root: Path) -> None:
     """Publish the complete post-QC graph, retaining isolated trees and excluding only staging data."""
+    manifest = json.loads((root / "manifest.json").read_text())
+    _require_resolved_licenses(manifest["sources"])
     checksums = json.loads((root / "checksums.json").read_text())
     published_checksums = {
         relative: digest for relative, digest in checksums.items() if not relative.startswith(("raw/", "spill/"))
