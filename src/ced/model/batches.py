@@ -54,12 +54,21 @@ def sample_neighborhood(
     node_limit: int,
     edge_types: np.ndarray | None = None,
     adjacency: TrainAdjacency | None = None,
+    required: np.ndarray | None = None,
 ) -> SampledNeighborhood:
     """Use only training statements; endpoint IDs remain global until final relabeling.
 
     adjacency may be supplied to reuse one CSR across many calls (production
     chunking); when omitted it is built here, matching the historical per-call
     boolean-mask scan at O(frontier x degree) instead of O(frontier x edges).
+
+    ``required`` lists supervision statement indices that must survive in the
+    batch's own compute graph: fanout choice can otherwise drop exactly the rare
+    statements (for example CED treatment edges) that training is meant to
+    score. Injection runs after every fanout draw, so ``required=None`` stays
+    byte-identical to the frozen reference and consumes no RNG. Only training
+    statements are injected (``splits == 0``): held-out statements must never
+    enter message passing or evaluation would leak its own targets.
     """
     random = np.random.default_rng(seed)
     nodes = set(map(int, seeds))
@@ -98,6 +107,19 @@ def sample_neighborhood(
                 nodes.add(tail)
                 size += additions
         frontier = sorted(following)
+    if required is not None:
+        for index in np.unique(np.asarray(required, dtype=np.int64)).tolist():
+            if index in selected or splits[index] != 0:
+                continue
+            head = int(edge_index[0, index])
+            tail = int(edge_index[1, index])
+            additions = (head not in nodes) + (tail not in nodes and tail != head)
+            if len(nodes) + additions > node_limit:
+                raise ValueError("required supervision endpoints exceed batch node limit")
+            selected.add(index)
+            nodes.add(head)
+            if tail != head:
+                nodes.add(tail)
     global_ids = np.array(sorted(nodes), dtype=np.int64)
     statement_ids = np.array(sorted(selected), dtype=np.int64)
     local = np.searchsorted(global_ids, edge_index[:, statement_ids]).astype(np.int64)

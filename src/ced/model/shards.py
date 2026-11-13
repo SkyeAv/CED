@@ -91,6 +91,9 @@ def write_batch_shards(
                     triples, count=runtime.split.negatives, seed=runtime.split.seed + start + split_id
                 )
             seeds = np.unique(np.concatenate((edges[:, positive].ravel(), head[valid], tail[valid])))
+            # Message passing stays train-only: held-out positives are supervision for
+            # evaluation, never injected statements.
+            required = positive[splits[positive] == 0]
             if in_memory:
                 assert adjacency is not None
                 neighborhood = sample_neighborhood(
@@ -103,6 +106,7 @@ def write_batch_shards(
                     node_limit=runtime.batch.node_limit,
                     edge_types=edge_types,
                     adjacency=adjacency,
+                    required=required,
                 )
             else:
                 assert disk is not None
@@ -114,6 +118,7 @@ def write_batch_shards(
                     seed=runtime.split.seed + start,
                     node_limit=runtime.batch.node_limit,
                     edge_types=edge_types,
+                    required=required,
                 )
             directory = root / "batches" / f"{label}-{start:09d}"
             directory.mkdir(parents=True)

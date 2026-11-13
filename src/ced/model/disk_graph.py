@@ -104,6 +104,7 @@ class DiskGraph:
         seed: int,
         node_limit: int,
         edge_types: np.ndarray | None = None,
+        required: np.ndarray | None = None,
     ) -> SampledNeighborhood:
         nodes = set(map(int, seeds))
         if len(nodes) > node_limit:
@@ -137,6 +138,24 @@ class DiskGraph:
                         following.add(other)
                         nodes.add(other)
             frontier = sorted(following)
+        if required is not None:
+            # Supervision edges must appear in their own compute graph; fanout reservoir
+            # choice can otherwise drop exactly the rare statements training must score.
+            # Injection runs after the fanout loops and consumes no RNG, so required=None
+            # behavior is unchanged. Callers must pass only training statement indices:
+            # held-out statements must never enter message passing (split isolation).
+            for index in np.unique(np.asarray(required, dtype=np.int64)).tolist():
+                if index in selected:
+                    continue
+                head = int(edges[0, index])
+                tail = int(edges[1, index])
+                additions = (head not in nodes) + (tail not in nodes and tail != head)
+                if len(nodes) + additions > node_limit:
+                    raise ValueError("required supervision endpoints exceed batch node limit")
+                selected.add(index)
+                nodes.add(head)
+                if tail != head:
+                    nodes.add(tail)
         global_ids = np.array(sorted(nodes), dtype=np.int64)
         statement_ids = np.array(sorted(selected), dtype=np.int64)
         local = np.searchsorted(global_ids, edges[:, statement_ids]).astype(np.int64)

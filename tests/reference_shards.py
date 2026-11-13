@@ -3,6 +3,12 @@
 Negative sampling and neighborhood implementations are shared dependencies;
 this reference freezes only the edge-type assignment and per-chunk triple
 construction that US-008 changes. Every produced tensor must stay byte-equal.
+
+Deliberate contract updates applied in lockstep with ced.model.shards (the
+produced writer must stay byte-equal to this reference):
+- Supervision injection: the per-chunk train positives are passed as
+  ``required`` to both samplers so every training batch keeps its own
+  supervision statements in its message-passing set.
 """
 
 from __future__ import annotations
@@ -57,6 +63,7 @@ def write_batch_shards_reference(
                     triples, count=runtime.split.negatives, seed=runtime.split.seed + start + split_id
                 )
             seeds = np.unique(np.concatenate((edges[:, positive].ravel(), head[valid], tail[valid])))
+            required = positive[splits[positive] == 0]
             if in_memory:
                 assert adjacency is not None
                 neighborhood = sample_neighborhood(
@@ -69,6 +76,7 @@ def write_batch_shards_reference(
                     node_limit=runtime.batch.node_limit,
                     edge_types=edge_types,
                     adjacency=adjacency,
+                    required=required,
                 )
             else:
                 assert disk is not None
@@ -80,6 +88,7 @@ def write_batch_shards_reference(
                     seed=runtime.split.seed + start,
                     node_limit=runtime.batch.node_limit,
                     edge_types=edge_types,
+                    required=required,
                 )
             directory = root / "batches" / f"{label}-{start:09d}"
             directory.mkdir(parents=True)
