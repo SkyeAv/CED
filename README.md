@@ -139,10 +139,19 @@ Modal jobs use an ephemeral anonymous volume, not a persistent named dataset vol
 4. Requires interactive `RUN` confirmation or explicit `--yes`.
 5. Uploads shared topology/features once, then one bounded batch group at a time.
 6. Runs GPU training or inference in a single-use container.
-7. Downloads checkpoints, metrics, and progress after each group.
-8. Removes uploaded batch files and remote outputs, then destroys the ephemeral volume in `finally`.
+7. Downloads each group's checkpoint and metrics into a `.partial` directory, validates its SHA-256 and configuration, then publishes an immutable `checkpoints/group-XXXXX/` directory.
+8. Atomically records the completed group in `progress.parquet`, updates the latest checkpoint pointers, and uploads that checkpoint before starting the next group.
+9. Removes uploaded batch files and remote outputs, then destroys the ephemeral volume in `finally`.
 
-Resume works by copying `checkpoint.pt`, `checkpoint.json`, and `progress.json` into a new run directory. The planner skips completed batches and passes only the remaining shard cursor to Modal.
+`progress.parquet` contains `run_id`, `group_index`, `batch_start`, `batch_end` (exclusive), `epoch`, `cursor`, `config_sha256`, `checkpoint_path`, and `checkpoint_sha256`. Only contiguous completed rows count as progress; temporary files and unpublished checkpoint directories do not. Root `checkpoint.pt`, `checkpoint.sha256`, and `checkpoint.json` are replaceable pointers to the latest completed group. Model, optimizer, and RNG state remain coupled in the PyTorch checkpoint, not in a second Safetensors representation.
+
+Resume continues the same run directory. It validates the run identity, configuration, ledger, and latest immutable checkpoint before paid confirmation, skips ledger-complete groups, and keeps group-local offsets separate from global checkpoint cursors. A failure inside a group repeats that group from the previous completed checkpoint; it does not repeat earlier groups. Keep the dataset, seed, and batch-group plan unchanged when resuming. Legacy checkpoint-only or `progress.json` runs are not automatically migrated.
+
+```sh
+ced train <dataset-id> --resume <run-id> --seed <original-seed> --yes
+```
+
+Evaluation remains a single cloud stage with final `metrics.json` and `evaluation.json`; interrupted ranking is recomputed rather than partially resumed.
 
 Evaluation supports exact filtered ranking and explicitly labeled sampled ranking:
 
@@ -166,7 +175,38 @@ Tensor artifacts use dataset schema 2. After upgrading, run `ced prepare` and th
 - `google/embeddinggemma-2`: text-only documents, 768 dimensions.
 - `Qwen/Qwen3-Embedding-0.6B`: documents without a query prompt, 1024 dimensions.
 
-The 2560-dimensional vectors cover names, class labels, predicates, qualifiers, and long attributes. All missing unique texts share one Modal call and the append-only cache. Returned immutable safetensors parts and Parquet indices are validated before publication. Dataset manifests include all referenced artifacts for training and evaluation.
+The 2560-dimensional vectors cover names, class labels, predicates, qualifiers, and long attributes. All missing unique texts share one Modal generator and the append-only cache. The encoder loads once and yields completed parts of at most 65,536 texts. Wenceslaus validates each vector/index pair's filenames, SHA-256, input order, global rows, dimension, and finite values, then publishes that part before consuming the next stream result. A failed stream preserves its adopted prefix; rerunning computes only the remaining texts. Dataset manifests include all referenced artifacts for training and evaluation.
+
+### Relational cache and recovery
+
+The shared cache lives at `.ced/text-embeddings/<encoder-key>/` by default. The encoder key includes the model configuration and pinned revisions; incompatible encoders do not share vectors.
+
+| Artifact | Relation or value | Completion boundary |
+| --- | --- | --- |
+| `index/part-XXXXXX.parquet` | `text_sha256` string, global `row` int64 | Listed in the atomically published cache manifest |
+| `parts/part-XXXXXX.safetensors` | `value[part_rows, dimension]` float32 | Paired with the published index; global rows remain stable |
+| `manifest.json` | Encoder metadata, total rows, ordered completed parts | Updated after every validated part |
+| Dataset `text-<encoder-key>/text-index.parquet` | Owner/field IDs joined to cached vector rows | Final dataset manifest and checksums |
+
+Missing work is a relational anti-join, not a vector scan. The workflow deduplicates requested text hashes, excludes published keys, encodes the remainder, then joins owner IDs back to cached rows. Conceptually:
+
+```sql
+SELECT DISTINCT r.text_sha256, r.text
+FROM requested_text r
+ANTI JOIN published_cache_index c USING (text_sha256);
+```
+
+Only manifest-listed indexes participate. Orphan or partial files never count as hits; duplicate incoming or already cached keys fail before publication. Appending never rewrites or renumbers existing vectors, allowing many datasets to reference the same text. Empty missing relations return before paid confirmation or Modal volume creation.
+
+After interruption, rerun the original command without deleting the cache:
+
+```sh
+ced encode-text <dataset-id> --provider modal_ensemble --yes
+```
+
+Final dataset-local semantic tensors may be rebuilt on CPU, but published GPU vectors are reused. If only the HF upload failed, use `ced publish --dataset <dataset-id>` instead. HF publication is a completed-artifact backup, not an automatic shared-cache or training-run restore service.
+
+Offline verification exercises real synthetic Parquet/Safetensors artifacts with fake Modal runners and volumes, including failed streams and partial checkpoint downloads. It does not launch paid Modal jobs or establish live-cloud performance guarantees.
 
 Six node tokens - name text, BERT class text, learned CURIE prefix, learned category, topology, and training-edge-only `log1p` degree - pass through attention and a residual 32-dimensional bottleneck autoencoder. Identical class labels share cached vectors. The node head composes with the predicate/qualifier autoencoder above, preserving learned direction features and statement reconstruction loss. Heads process at most 4096 owners per chunk.
 
