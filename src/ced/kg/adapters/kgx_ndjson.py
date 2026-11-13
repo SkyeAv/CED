@@ -174,6 +174,15 @@ class KgxNdjsonAdapter:
                 terms.extend(self.ontology_terms("attribute", list(statement.attributes)))
                 nodes.extend(self.overlay_nodes(raw))
                 events.extend(attribute_events("statement", statement.id, self.source.name, statement.attributes))
+                # Qualifiers (significance, direction, population context, and any
+                # other observed type) become statement attribute events under the
+                # qualifier. path prefix so feature fitting sees them alongside
+                # attributes without remapping their arbitrary keys.
+                events.extend(
+                    attribute_events(
+                        "statement", statement.id, self.source.name, statement.qualifiers, prefix="qualifier"
+                    )
+                )
                 if statement.predicate not in self.predicates:
                     self.predicates.add(statement.predicate)
                     predicates.append(

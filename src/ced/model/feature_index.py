@@ -50,6 +50,20 @@ class FeatureIndex:
         rows = _ranges(self.cat_owner, owners)
         return rows, self.cat_field[rows], self.cat_value[rows]
 
+    def categorical_groups(self, owners: torch.Tensor) -> torch.Tensor:
+        """Position in ``owners`` for every row of ``categorical_rows(owners)``.
+
+        ``categorical_rows`` enumerates each owner's rows in query order, so the
+        group ids repeat each query index by its row count; consumers can scatter
+        per-row vectors back onto per-owner slots with one ``index_add_``.
+        """
+        if not self.categorical or owners.numel() == 0:
+            return torch.empty(0, dtype=torch.long)
+        counts = torch.searchsorted(self.cat_owner, owners, right=True) - torch.searchsorted(
+            self.cat_owner, owners, right=False
+        )
+        return torch.repeat_interleave(torch.arange(owners.shape[0], device=owners.device), counts)
+
     def numeric_rows(self, owners: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if not self.numeric or owners.numel() == 0:
             empty = torch.empty(0, dtype=torch.long)

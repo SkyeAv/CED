@@ -281,8 +281,11 @@ def test_torch_encoder_decoder_and_losses() -> None:
     assert scores.shape == (2,)
     assert torch.isfinite(link_loss(scores, torch.tensor([1.0, 0.0]))).item()
     auxiliary = AuxiliaryAttributeDecoder(8, {2: 4}, [5])
+    # _auxiliary_tensors returns categorical states first, then numeric states;
+    # each group loss sees only its own slice.
+    mixed = torch.cat((state, state))
     category, number = auxiliary(
-        state,
+        mixed,
         torch.tensor([2, 2, 2]),
         torch.tensor([0, 1, 2]),
         torch.tensor([5, 5, 5]),
@@ -290,6 +293,15 @@ def test_torch_encoder_decoder_and_losses() -> None:
         torch.tensor([True, False, True]),
     )
     assert torch.isfinite(category + number).item()
+    with pytest.raises(ValueError, match="misaligned"):
+        auxiliary(
+            state,
+            torch.tensor([2, 2, 2]),
+            torch.tensor([0, 1, 2]),
+            torch.tensor([5, 5, 5]),
+            torch.tensor([0.0, 1.0, 2.0]),
+            torch.tensor([True, False, True]),
+        )
 
 
 def test_exact_filtered_rank_removes_known_positives() -> None:

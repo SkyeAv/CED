@@ -92,6 +92,16 @@ def test_kgx_merge_union_and_evidence(tmp_path: Path) -> None:
     assert set(one["categories"]) == {"biolink:Gene", "AMALGAM:Gene"}
     terms = pq.read_table(root / "ontology_terms").to_pylist()
     assert {"biolink:Gene", "AMALGAM:Gene", "AMALGAM:expanded"} <= {row["id"] for row in terms}
+    # Qualifiers become statement attribute events, so feature fitting can
+    # route significance and context values into the model.
+    attributes = pq.read_table(root / "attributes").to_pylist()
+    qualifier = next(row for row in attributes if row["path"] == "qualifier.AMALGAM:context")
+    assert qualifier["owner_kind"] == "statement"
+    assert qualifier["owner_id"] == next(
+        row["id"] for row in pq.read_table(root / "statements").to_pylist() if row["native_id"] == "e2"
+    )
+    assert qualifier["value_type"] == "string"
+    assert qualifier["text"] == "yes"
 
 
 def compact_fixture(tmp_path: Path) -> SourceArtifacts:

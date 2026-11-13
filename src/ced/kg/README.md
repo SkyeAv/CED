@@ -2,7 +2,7 @@
 
 `ced build --source ced` builds offline on wenceslaus. Omit `--source` to select enabled YAML sources; missing payloads report `ced fetch --source <name>` rather than downloading.
 
-Snapshots live in `.ced/snapshots/<hash>/`. Partitioned Parquet is authoritative. `nodes/` merges canonical IDs; `statements/` preserves source/native evidence identity, not only SPO triples. `attributes/` stores every original attribute as typed long events, including structured containers and leaves. `node_identities/` retains source-native identity records. KGX shards are interoperability exports; use long attribute tables for lossless recovery.
+Snapshots live in `.ced/snapshots/<hash>/`. Partitioned Parquet is authoritative. `nodes/` merges canonical IDs; `statements/` preserves source/native evidence identity, not only SPO triples. `attributes/` stores every original attribute as typed long events, including structured containers and leaves; statement qualifiers (significance, direction, population context, and any other observed type) join the same event table under the `qualifier.` path prefix, which is how they reach the model's edge feature store. `node_identities/` retains source-native identity records. KGX shards are interoperability exports; use long attribute tables for lossless recovery.
 
 `ontology_terms/` unifies the locked, installed Biolink vocabulary with Amalgam classes, predicates, attributes, taxa, and observed qualifiers. IDs are not restricted to Biolink enums. Explicit YAML predicate overrides are the only semantic remapping. Amalgam int32 keys remain snapshot metadata; canonical entity/taxon CURIEs and binary16 UUIDs determine stable identity. Synonyms, xrefs, and conflict records never merge entities.
 

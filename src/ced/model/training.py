@@ -116,7 +116,6 @@ def build_model(document: dict[str, Any], root: Path, edge_type_count: int, seed
     relation_count = document["relations"]
     counts, numeric = load_feature_metadata(root)
     torch.manual_seed(seed)
-    features: FeatureProvider
     encoder = RelationalAttentionEncoder(32, 16, edge_type_count)
     decoder = ComplexDecoder(32, relation_count)
     attributes = AuxiliaryAttributeDecoder(32, counts, numeric)

@@ -83,11 +83,26 @@ class AuxiliaryAttributeDecoder(nn.Module):
         numeric_target: torch.Tensor,
         numeric_valid: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        # ``_auxiliary_tensors`` concatenates categorical states before numeric
+        # states; each group loss must see only its own slice or a batch that
+        # mixes both feature kinds misaligns masks against states.
+        categorical_count = categorical_field.shape[0]
+        if states.shape[0] != categorical_count + numeric_field.shape[0]:
+            raise ValueError("auxiliary states and fields are misaligned")
         category = self._group_loss(
-            states, categorical_field, categorical_target, self.categorical_index, self.categorical_heads
+            states[:categorical_count],
+            categorical_field,
+            categorical_target,
+            self.categorical_index,
+            self.categorical_heads,
         )
         number = self._group_loss(
-            states, numeric_field, numeric_target, self.numeric_index, self.numeric_heads, numeric_valid
+            states[categorical_count:],
+            numeric_field,
+            numeric_target,
+            self.numeric_index,
+            self.numeric_heads,
+            numeric_valid,
         )
         return category, number
 
