@@ -151,7 +151,7 @@ def test_modal_plan_rotates_bounded_batches(tmp_path: Path, synthetic_dataset: C
     plan = dataset_transfer_plan(root, config, "train")
     assert [group.indices for group in plan.groups] == [[0, 1], [2]]
     assert plan.shared_bytes <= config.modal.max_shared_bytes
-    assert plan.edge_type_count == 2
+    assert plan.edge_type_count == 1
     assert config.modal.single_use_containers is False
 
     run_root = tmp_path / "run"

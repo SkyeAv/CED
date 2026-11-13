@@ -405,6 +405,7 @@ def train_batches(
     max_batches: int | None = None,
     auxiliary_weight: float = 0.1,
     attribute_weight: float = 0.1,
+    edge_type_count: int | None = None,
     max_memory_reductions: int = 4,
 ) -> dict[str, Any]:
     document = json.loads((root / "manifest.json").read_text())
@@ -412,7 +413,10 @@ def train_batches(
     resolved_device = resolve_device(device)
     if attribute_weight < 0:
         raise ValueError("attribute weight must be nonnegative")
-    edge_type_count = persisted_edge_type_count(document, root)
+    persisted_count = persisted_edge_type_count(document, root)
+    if edge_type_count is not None and edge_type_count != persisted_count:
+        raise ValueError(f"planned edge type count {edge_type_count} differs from persisted count {persisted_count}")
+    edge_type_count = persisted_count
     model = build_model(document, root, edge_type_count, seed).to(resolved_device)
     # fused AdamW is a CUDA-only kernel choice; the CPU path stays bitwise unchanged.
     optimizer = (

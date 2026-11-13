@@ -109,6 +109,15 @@ def test_empty_and_missing_pools_preserve_endpoints(count: int) -> None:
     assert not valid.any()
 
 
+def test_global_ids_outside_positive_index_do_not_alias_known_triples() -> None:
+    """Sparse global IDs must not be rejected through compact-key arithmetic aliasing."""
+    pools = TypedPools(subjects={0: np.array([100, 101])}, objects={})
+    context = negative_context(np.array([1]), np.array([0]), np.array([1]))
+    heads, _, valid = sample_negatives([(0, 0, 0)], pools, context, count=4, seed=4)
+    assert set(heads[0, 0::2][valid[0, 0::2]].tolist()) == {100, 101}
+    assert valid[0, 0::2].sum() == 2
+
+
 def test_negative_count_is_rejected() -> None:
     """Negative output dimensions fail with a clear sampler-specific error."""
     context = negative_context(np.array([0]), np.array([0]), np.array([1]))

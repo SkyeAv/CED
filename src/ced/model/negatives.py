@@ -101,7 +101,13 @@ def _encoded(candidates: np.ndarray, relation: int, side: int, fixed: int, conte
 
 
 def _eligible(pool: np.ndarray, relation: int, side: int, fixed: int, context: NegativeContext) -> np.ndarray:
-    return pool[~_contains(context.keys, _encoded(pool, relation, side, fixed, context))]
+    # Nodes outside the positive index cannot be positives. Encoding them with
+    # the smaller positive-only radix can alias a different known triple.
+    bounded = (pool >= 0) & (pool < context.node_count)
+    known = np.zeros(pool.shape, dtype=np.bool_)
+    if relation < context.relation_count and fixed < context.node_count:
+        known[bounded] = _contains(context.keys, _encoded(pool[bounded], relation, side, fixed, context))
+    return pool[~known]
 
 
 def choose_candidates(

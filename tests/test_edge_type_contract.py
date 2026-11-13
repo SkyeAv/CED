@@ -18,6 +18,14 @@ from ced.model.evaluation import evaluate_dataset
 from ced.model.training import train_batches
 
 
+def test_planned_count_must_match_persisted_count(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
+    """A stale shard-derived plan cannot override the global persisted vocabulary."""
+    root = tmp_path / "dataset"
+    synthetic_dataset(root, batches=1)
+    with pytest.raises(ValueError, match="planned edge type count 2 differs from persisted count 1"):
+        train_batches(root, epochs=1, edge_type_count=2, device="cpu")
+
+
 def test_training_checkpoint_loads_during_evaluation(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
     root = tmp_path / "dataset"
     synthetic_dataset(root, batches=1)
