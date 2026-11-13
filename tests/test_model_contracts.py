@@ -373,6 +373,59 @@ def test_training_checkpoint_resumes_epoch(tmp_path: Path) -> None:
     assert torch.load(checkpoint, map_location="cpu", weights_only=False)["epoch"] == 2
 
 
+def test_selected_training_resume_uses_group_local_cursor(
+    tmp_path: Path, synthetic_dataset: Callable[..., int]
+) -> None:
+    """A restored global cursor never slices a selected group by that amount.
+
+    Why: group cursors are local offsets, while checkpoints carry global progress.
+    Mixing them makes a resume after group one skip every item in group two and
+    can falsely mark training complete without doing its GPU work.
+    """
+    from ced.model.training import train_batches
+
+    root = tmp_path / "dataset"
+    synthetic_dataset(root, batches=1)
+    checkpoint = tmp_path / "checkpoint.pt"
+    first = train_batches(
+        root,
+        epochs=1,
+        seed=1,
+        checkpoint_path=checkpoint,
+        device="cpu",
+        selected_indices=[0],
+        start_cursor=0,
+        global_cursor=0,
+    )
+    assert first["consumed"] == 1
+    assert first["cursor"] == 1
+
+    second = train_batches(
+        root,
+        epochs=1,
+        seed=1,
+        checkpoint_path=checkpoint,
+        device="cpu",
+        selected_indices=[0],
+        start_cursor=0,
+        global_cursor=1,
+    )
+    assert second["consumed"] == 1
+    assert second["cursor"] == 2
+
+    with pytest.raises(ValueError, match="does not match group start 3"):
+        train_batches(
+            root,
+            epochs=1,
+            seed=1,
+            checkpoint_path=checkpoint,
+            device="cpu",
+            selected_indices=[0],
+            start_cursor=0,
+            global_cursor=3,
+        )
+
+
 def test_random_text_encoder_is_deterministic_and_normalized() -> None:
     torch = pytest.importorskip("torch")
     from ced.model.encoding import RandomTextEncoder
@@ -428,6 +481,82 @@ def test_text_embedding_cache_appends_parts_without_rewriting(tmp_path: Path) ->
     loaded = references[1].load(tmp_path)
     assert loaded.shape == (1, 4)
     assert np.isfinite(loaded).all()
+
+
+def test_text_cache_publishes_each_part_before_later_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed later batch must not hide an earlier completed part.
+
+    Why: cache misses are computed from manifest-published Parquet indexes. If a
+    long encoder stream fails before its final write, every completed part must
+    still be visible so the next anti-join recomputes only the unfinished texts.
+    """
+    pytest.importorskip("torch")
+    import duckdb
+    import pyarrow.parquet as pq
+
+    from ced.config.models import TextEncodingSettings
+    from ced.model import encoding
+
+    monkeypatch.setattr(encoding, "PART_ROWS", 2)
+    encoder = encoding.RandomTextEncoder(4, seed=11)
+    cache = encoding.TextEmbeddingCache(tmp_path, TextEncodingSettings(provider="random", dimension=4))
+    texts = ["one", "two", "three", "explode"]
+
+    def batches():
+        for start in range(0, len(texts), 2):
+            batch = texts[start : start + 2]
+            if "explode" in batch:
+                raise RuntimeError("injected encoder failure")
+            yield batch, encoder.encode(batch).detach().cpu().numpy()
+
+    with pytest.raises(RuntimeError, match="injected encoder failure"):
+        cache.append_stream(batches())
+    assert cache.manifest()["rows"] == 2
+
+    connection = duckdb.connect()
+    try:
+        connection.execute("CREATE TABLE text (position BIGINT, text_sha256 VARCHAR, text VARCHAR)")
+        connection.executemany(
+            "INSERT INTO text VALUES (?, ?, ?)",
+            [(position, encoding.text_key(text), text) for position, text in enumerate(texts)],
+        )
+        cache.create_index(connection)
+        missing = tmp_path / "missing.parquet"
+        connection.execute(
+            f"""COPY (SELECT t.text_sha256, t.text FROM text t
+                    WHERE NOT EXISTS (SELECT 1 FROM cache_index c WHERE c.text_sha256=t.text_sha256)
+                    ORDER BY t.position) TO '{missing}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
+        )
+    finally:
+        connection.close()
+    assert pq.read_table(missing).column("text").to_pylist() == ["three", "explode"]
+
+
+def test_text_cache_rejects_duplicate_keys_without_advancing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Local streaming rejects repeated and already cached keys before writing.
+
+    Why: upstream anti-joins normally guarantee uniqueness, but this public cache
+    boundary must remain safe under retries and direct callers too. Duplicate rows
+    waste GPU work and make a text-to-vector join ambiguous.
+    """
+    pytest.importorskip("torch")
+    from ced.config.models import TextEncodingSettings
+    from ced.model import encoding
+
+    monkeypatch.setattr(encoding, "PART_ROWS", 2)
+    cache = encoding.TextEmbeddingCache(tmp_path, TextEncodingSettings(provider="random", dimension=4))
+    encoder = encoding.RandomTextEncoder(4)
+
+    def append(texts: list[str]) -> None:
+        cache.append_stream(iter([(texts, encoder.encode(texts).detach().cpu().numpy())]))
+
+    append(["one", "two"])
+    with pytest.raises(ValueError, match="already cached"):
+        append(["two", "three"])
+    assert cache.manifest()["rows"] == 2
+    with pytest.raises(ValueError, match="duplicated"):
+        append(["four", "four"])
+    assert cache.manifest()["rows"] == 2
 
 
 def test_text_embedding_cache_rejects_wrong_dimension(tmp_path: Path) -> None:

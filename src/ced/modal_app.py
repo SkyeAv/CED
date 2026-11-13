@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import shutil
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
 import modal
+import pyarrow.parquet as pq
 
 from ced.acquisition.base import atomic_write_json
 from ced.config.models import RuntimeConfig
@@ -19,6 +20,8 @@ from ced.modal_plan import (
     dataset_transfer_plan,
     execute_plan,
     prepare_run_directory,
+    validate_checkpoint,
+    validate_training_resume,
 )
 from ced.preflight import require_cpu_worker
 
@@ -26,7 +29,9 @@ from ced.preflight import require_cpu_worker
 class TextCache(Protocol):
     def manifest(self) -> dict[str, Any]: ...
 
-    def adopt_parts(self, encoded: Path, missing: Path) -> int: ...
+    def adopt_parts(
+        self, encoded: Path, missing: Path, *, input_row_start: int = 0, rows: int | None = None
+    ) -> int: ...
 
 
 def human_size(size: int) -> str:
@@ -71,6 +76,9 @@ class ModalFunctionRunner(FunctionRunner):
 
     def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self.functions[function].remote(payload, self.volume)
+
+    def stream(self, function: str, payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        yield from self.functions[function].remote_gen(payload, self.volume)
 
 
 def build_image(runtime: RuntimeConfig, *, text: bool = False) -> Any:
@@ -128,21 +136,27 @@ def create_app(
         metrics = train_batches(
             root,
             epochs=payload["epochs"],
+            learning_rate=payload.get("learning_rate", 1e-3),
             seed=payload["seed"],
             checkpoint_path=Path(payload["checkpoint_path"]),
             device=payload.get("device", "cuda"),
             selected_indices=payload["selected_indices"],
             start_cursor=payload["start_cursor"],
+            global_cursor=payload.get("global_cursor"),
             max_batches=payload["max_batches"],
+            auxiliary_weight=payload.get("auxiliary_weight", 0.1),
+            attribute_weight=payload.get("attribute_weight", 0.1),
         )
+        checkpoint = Path(payload["checkpoint_path"])
+        validate_checkpoint(checkpoint.parent, payload["config_sha256"], metrics)
         output = Path(payload["output_prefix"])
         atomic_write_json(output / "metrics.json", metrics)
-        checkpoint = Path(payload["checkpoint_path"])
         shutil.copy2(checkpoint, output / "checkpoint.pt")
         for name in ("checkpoint.sha256", "checkpoint.json"):
             source = checkpoint.parent / name
             if source.exists():
                 shutil.copy2(source, output / name)
+        validate_checkpoint(output, payload["config_sha256"], metrics)
         volume.commit()
         return metrics
 
@@ -164,7 +178,7 @@ def create_app(
         volume.commit()
         return report
 
-    functions = {"train_group": train_group, "evaluate": evaluate}
+    functions: dict[str, Any] = {"train_group": train_group, "evaluate": evaluate}
     if include_encoding:
         model_volume = modal.Volume.from_name("ced-text-models-v1", create_if_missing=True)
         encoding_common = common | {
@@ -174,9 +188,9 @@ def create_app(
         }
 
         @app.function(**encoding_common)
-        def encode_text(payload: dict[str, Any], volume: Any) -> dict[str, Any]:
+        def encode_text(payload: dict[str, Any], volume: Any) -> Iterator[dict[str, Any]]:
             from ced.config.models import EnsembleTextEncodingSettings
-            from ced.model.encoding import encode_missing_to_parts
+            from ced.model.encoding import iter_encode_missing_parts
             from ced.model.text_models import create_ensemble_encoder
 
             root = _prepare(payload)
@@ -184,16 +198,22 @@ def create_app(
             encoder = create_ensemble_encoder(settings, device="cuda")
             model_volume.commit()
             staged = root / "encoded"
-            report = encode_missing_to_parts(
+            output = Path(payload["output_prefix"])
+            for descriptor in iter_encode_missing_parts(
                 root / "missing.parquet",
                 staged,
                 encoder,
                 start_row=payload["start_row"],
                 start_part=payload["start_part"],
-            )
-            shutil.copytree(staged, Path(payload["output_prefix"]), dirs_exist_ok=True)
-            volume.commit()
-            return report
+            ):
+                for name in descriptor["files"]:
+                    source = staged / name
+                    destination = output / name
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, destination)
+                    source.unlink()
+                volume.commit()
+                yield descriptor
 
         functions["encode_text"] = encode_text
     return app, functions
@@ -215,6 +235,8 @@ def confirm_paid(plan: TransferPlan, runtime: RuntimeConfig, *, assume_yes: bool
 
 def encode_text_remote(runtime: RuntimeConfig, missing: Path, cache: TextCache, *, assume_yes: bool = False) -> None:
     require_cpu_worker(runtime)
+    if pq.ParquetFile(missing).metadata.num_rows == 0:
+        return
     settings = runtime.text_encoding.ensemble
     size = missing.stat().st_size
     if size > runtime.modal.max_shared_bytes:
@@ -244,8 +266,13 @@ def encode_text_remote(runtime: RuntimeConfig, missing: Path, cache: TextCache, 
                         "start_row": manifest["rows"],
                         "start_part": len(manifest["parts"]),
                     },
+                    adopt_encoded=lambda root, descriptor: cache.adopt_parts(
+                        root,
+                        missing,
+                        input_row_start=descriptor["input_row_start"],
+                        rows=descriptor["rows"],
+                    ),
                 )
-        cache.adopt_parts(run_root, missing)
     finally:
         shutil.rmtree(run_root, ignore_errors=True)
 
@@ -262,18 +289,15 @@ def train_remote(
     require_cpu_worker(runtime)
     root = runtime.artifact_path("datasets", dataset)
     plan = dataset_transfer_plan(root, runtime, "train")
-    confirm_paid(plan, runtime, assume_yes=assume_yes)
-    run_root = prepare_run_directory(runtime, dataset, "train")
     if resume:
-        source = runtime.artifact_path("runs", resume)
-        checkpoint = source / "checkpoint.pt"
-        if not checkpoint.is_file():
-            raise FileNotFoundError(f"resume checkpoint is missing: {checkpoint}")
-        shutil.copy2(checkpoint, run_root / "checkpoint.pt")
-        for name in ("checkpoint.sha256", "checkpoint.json", "progress.json"):
-            sidecar = source.parent / name
-            if sidecar.is_file():
-                shutil.copy2(sidecar, run_root / name)
+        run_root = runtime.artifact_path("runs", resume)
+        recorded = json.loads((run_root / "run-config.json").read_text())
+        if recorded.get("dataset") != dataset or recorded.get("mode") != "train" or recorded.get("run_id") != resume:
+            raise ValueError("resume run identity does not match the requested dataset and mode")
+        validate_training_resume(plan, run_root, seed=seed)
+    else:
+        run_root = prepare_run_directory(runtime, dataset, "train")
+    confirm_paid(plan, runtime, assume_yes=assume_yes)
     with modal.Volume.ephemeral(version=2) as volume:
         app, functions = create_app(runtime, volume, f"ced-train-{run_root.name}")
         adapter = ModalVolumeAdapter(volume)

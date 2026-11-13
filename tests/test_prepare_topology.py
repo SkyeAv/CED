@@ -22,7 +22,7 @@ from ced.acquisition.base import sha256_file
 from ced.config.models import RuntimeConfig, SplitSettings
 from ced.kg.audit import validate_checksums
 from ced.kg.writer import ATTRIBUTE_SCHEMA, NODE_SCHEMA, PREDICATE_SCHEMA, STATEMENT_SCHEMA
-from ced.model.encoding import encode_dataset_text
+from ced.model.encoding import RandomTextEncoder, encode_batches, encode_dataset_text, encoding_dimension
 from ced.model.feature_index import FeatureIndex
 from ced.model.prepare import prepare_dataset
 from ced.model.schemas import TensorRef
@@ -434,6 +434,47 @@ def test_encode_dataset_text_resolves_every_record(tmp_path: Path, monkeypatch: 
     assert sha256_file(dataset / "qualifier-embeddings.safetensors") == semantic_digest_before
     assert not (dataset / "text-records.partial.parquet").exists()
     assert not (dataset / "text-missing.partial.parquet").exists()
+
+
+def test_modal_encoding_skips_cloud_when_cache_is_complete(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A complete cache avoids even creating the paid encoding path.
+
+    Why: the anti-join, not model execution, decides whether work exists. The first
+    fake call fills the same cache layout used by Modal; the second run must reuse
+    it without invoking the callback or changing the encoded artifact.
+    """
+    _, dataset, _runtime = prepare(tmp_path, monkeypatch)
+    monkeypatch.setattr("ced.model.encoding.require_cpu_worker", lambda config: None)
+    runtime = RuntimeConfig.model_validate(
+        {
+            "remote_project": str(tmp_path),
+            "artifact_root": str(tmp_path / "artifacts"),
+            "cpu_workers": 4,
+            "memory_limit": "4GB",
+            "disk_reserve_gb": 0.5,
+            "text_encoding": {"provider": "modal_ensemble"},
+        }
+    )
+    calls = 0
+
+    def fake_remote(config: RuntimeConfig, missing: Path, cache, *, assume_yes: bool = False) -> None:
+        nonlocal calls
+        calls += 1
+        encoder = RandomTextEncoder(encoding_dimension(config.text_encoding))
+        cache.append_stream(encode_batches(missing, encoder, 8))
+
+    monkeypatch.setattr("ced.modal_app.encode_text_remote", fake_remote)
+    first = encode_dataset_text(runtime, dataset.name)
+    assert calls == 1
+    digest = sha256_file(dataset / first.index_path)
+
+    def unexpected_call(*args: object, **kwargs: object) -> None:
+        raise AssertionError("a complete text cache must not start Modal encoding")
+
+    monkeypatch.setattr("ced.modal_app.encode_text_remote", unexpected_call)
+    second = encode_dataset_text(runtime, dataset.name)
+    assert calls == 1
+    assert sha256_file(dataset / second.index_path) == digest
 
 
 def test_prepared_vocabulary_loads_training_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

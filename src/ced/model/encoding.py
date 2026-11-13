@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 from collections.abc import Iterator, Sequence
+from itertools import islice
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -166,6 +167,24 @@ class TextEmbeddingCache:
                 SELECT text_sha256,min(row) AS row FROM read_parquet([{listing}]) GROUP BY text_sha256"""
         )
 
+    def _validate_new_keys(self, connection: duckdb.DuckDBPyConnection, index: pa.Table, name: str) -> None:
+        """Register an incoming relation after proving its keys are new and unique."""
+        connection.register("incoming_index", index)
+        try:
+            counts = connection.execute("SELECT count(*), count(DISTINCT text_sha256) FROM incoming_index").fetchone()
+            assert counts is not None
+            if counts[0] != counts[1]:
+                raise ValueError(f"text keys are duplicated in {name}")
+            cached = connection.execute(
+                "SELECT count(*) FROM incoming_index i JOIN cache_index c USING (text_sha256)"
+            ).fetchone()
+            assert cached is not None
+            if cached[0]:
+                raise ValueError(f"text keys are already cached in {name}")
+        except Exception:
+            connection.unregister("incoming_index")
+            raise
+
     def part_refs(self) -> list[TensorRef]:
         manifest = self.manifest()
         dimension = int(manifest["dimension"])
@@ -191,6 +210,8 @@ class TextEmbeddingCache:
         pending: list[np.ndarray] = []
         pending_rows = 0
         added = 0
+        connection = duckdb.connect()
+        self.create_index(connection)
 
         def flush() -> None:
             nonlocal row, pending_keys, pending, pending_rows
@@ -201,85 +222,91 @@ class TextEmbeddingCache:
             vectors = np.concatenate(pending) if len(pending) > 1 else pending[0]
             if not np.isfinite(vectors).all():
                 raise ValueError("text encoder returned non-finite values")
+            index = pa.table(
+                {
+                    "text_sha256": pa.array(pending_keys, pa.string()),
+                    "row": pa.array(np.arange(row, row + pending_rows, dtype=np.int64)),
+                }
+            )
+            self._validate_new_keys(connection, index, index_name)
             write_tensor(self.parts / name, vectors)
             temporary = self.index / f"{index_name}.tmp-{os.getpid()}"
-            pq.write_table(
-                pa.table(
-                    {
-                        "text_sha256": pa.array(pending_keys, pa.string()),
-                        "row": pa.array(np.arange(row, row + pending_rows, dtype=np.int64)),
-                    }
-                ),
-                temporary,
-                compression="zstd",
-            )
+            pq.write_table(index, temporary, compression="zstd")
             temporary.replace(self.index / index_name)
             parts.append({"name": name, "rows": pending_rows})
             row += pending_rows
+            atomic_write_json(self.manifest_path, manifest | {"rows": row, "parts": parts})
+            connection.execute("INSERT INTO cache_index SELECT text_sha256, row FROM incoming_index")
+            connection.unregister("incoming_index")
             pending_keys, pending, pending_rows = [], [], 0
 
-        for texts, values in batches:
-            array = np.ascontiguousarray(values, dtype=np.float32)
-            if array.ndim != 2 or array.shape[0] != len(texts) or array.shape[1] != dimension:
-                raise ValueError(f"encoded batch shape {array.shape} does not match cache dimension {dimension}")
-            pending_keys.extend(text_key(text) for text in texts)
-            pending.append(array)
-            pending_rows += array.shape[0]
-            added += array.shape[0]
-            if pending_rows >= PART_ROWS:
-                flush()
-        flush()
-        if added:
-            atomic_write_json(self.manifest_path, manifest | {"rows": row, "parts": parts})
-        return added
+        try:
+            for texts, values in batches:
+                array = np.ascontiguousarray(values, dtype=np.float32)
+                if array.ndim != 2 or array.shape[0] != len(texts) or array.shape[1] != dimension:
+                    raise ValueError(f"encoded batch shape {array.shape} does not match cache dimension {dimension}")
+                pending_keys.extend(text_key(text) for text in texts)
+                pending.append(array)
+                pending_rows += array.shape[0]
+                added += array.shape[0]
+                if pending_rows >= PART_ROWS:
+                    flush()
+            flush()
+            return added
+        finally:
+            connection.close()
 
-    def adopt_parts(self, encoded: Path, missing: Path) -> int:
-        """Validate and atomically publish parts produced by one Modal encoding call."""
+    def adopt_parts(
+        self,
+        encoded: Path,
+        missing: Path,
+        *,
+        input_row_start: int = 0,
+        rows: int | None = None,
+    ) -> int:
+        """Validate and publish each part of a selected missing-input slice."""
         previous = self.manifest()
         dimension = int(previous["dimension"])
         first_row = int(previous["rows"])
         parts = list(previous["parts"])
         vectors = sorted((encoded / "vectors").glob("part-*.safetensors"))
         expected_file = pq.ParquetFile(missing)
-        expected_total = expected_file.metadata.num_rows
-        expected_batches = expected_file.iter_batches(PART_ROWS, columns=["text_sha256"])
-        expected_batch: pa.RecordBatch | None = None
-        expected_offset = 0
+        available_rows = expected_file.metadata.num_rows
+        expected_total = available_rows - input_row_start if rows is None else rows
+        if input_row_start < 0 or expected_total < 0 or input_row_start + expected_total > available_rows:
+            raise ValueError(
+                f"invalid Modal input slice {input_row_start}:{input_row_start + expected_total} "
+                f"for {available_rows} rows"
+            )
+        key_rows = (
+            key
+            for batch in expected_file.iter_batches(PART_ROWS, columns=["text_sha256"])
+            for key in batch.column("text_sha256").to_pylist()
+        )
+        expected_keys = islice(key_rows, input_row_start, input_row_start + expected_total)
         consumed = 0
         self.parts_root.mkdir(exist_ok=True)
         self.index_root.mkdir(exist_ok=True)
-
-        def expected_keys(count: int) -> pa.ChunkedArray:
-            nonlocal expected_batch, expected_offset
-            chunks: list[pa.Array] = []
-            remaining = count
-            while remaining:
-                if expected_batch is None or expected_offset == expected_batch.num_rows:
-                    expected_batch = next(expected_batches)
-                    expected_offset = 0
-                assert expected_batch is not None
-                take = min(remaining, expected_batch.num_rows - expected_offset)
-                chunks.append(expected_batch.column("text_sha256").slice(expected_offset, take))
-                expected_offset += take
-                remaining -= take
-            return pa.chunked_array(chunks)
-
+        connection = duckdb.connect()
         try:
+            self.create_index(connection)
             for vector_path in vectors:
                 name = f"part-{len(parts):06d}.safetensors"
                 if vector_path.name != name:
                     raise ValueError(f"unexpected Modal part {vector_path.name}; expected {name}")
                 index_path = encoded / "index" / Path(name).with_suffix(".parquet").name
                 index = pq.read_table(index_path, schema=INDEX_SCHEMA)
-                rows = index.num_rows
-                if rows == 0 or not index["text_sha256"].equals(expected_keys(rows)):
+                part_rows = index.num_rows
+                expected = pa.chunked_array([pa.array(list(islice(expected_keys, part_rows)), type=pa.string())])
+                if part_rows == 0 or not index["text_sha256"].equals(expected):
                     raise ValueError(f"Modal text order mismatch in {name}")
-                expected_rows = np.arange(first_row + consumed, first_row + consumed + rows, dtype=np.int64)
+                expected_rows = np.arange(first_row + consumed, first_row + consumed + part_rows, dtype=np.int64)
                 if not np.array_equal(index["row"].to_numpy(zero_copy_only=False), expected_rows):
                     raise ValueError(f"Modal row mismatch in {name}")
+                self._validate_new_keys(connection, index, name)
                 from ced.model.tensors import read_tensor
 
-                values = read_tensor(vector_path, column="value", dtype="float32", shape=[rows, dimension])
+                values = read_tensor(vector_path, column="value", dtype="float32", shape=[part_rows, dimension])
                 if not np.isfinite(values).all():
                     raise ValueError(f"Modal returned non-finite values in {name}")
                 destination = self.parts_root / name
@@ -288,13 +315,15 @@ class TextEmbeddingCache:
                 index_destination = self.index_root / index_path.name
                 index_destination.unlink(missing_ok=True)
                 index_path.replace(index_destination)
-                parts.append({"name": name, "rows": rows})
-                consumed += rows
+                parts.append({"name": name, "rows": part_rows})
+                consumed += part_rows
+                atomic_write_json(self.manifest_path, previous | {"rows": first_row + consumed, "parts": parts})
+                connection.execute("INSERT INTO cache_index SELECT text_sha256, row FROM incoming_index")
+                connection.unregister("incoming_index")
             if consumed != expected_total:
                 raise ValueError(f"Modal returned {consumed} rows, expected {expected_total}")
-        except StopIteration as exception:
-            raise ValueError("Modal returned more text rows than requested") from exception
-        atomic_write_json(self.manifest_path, previous | {"rows": first_row + consumed, "parts": parts})
+        finally:
+            connection.close()
         return consumed
 
 
@@ -305,22 +334,23 @@ def encode_batches(missing: Path, encoder: TextEncoder, batch_size: int) -> Iter
         yield texts, np.ascontiguousarray(vectors)
 
 
-def encode_missing_to_parts(
+def iter_encode_missing_parts(
     missing: Path, output: Path, encoder: TextEncoder, *, start_row: int = 0, start_part: int = 0
-) -> dict[str, Any]:
-    """Encode the missing-text Parquet into cache-compatible vector and index parts."""
+) -> Iterator[dict[str, Any]]:
+    """Encode lazily and yield one checksummed descriptor per completed part."""
     (output / "vectors").mkdir(parents=True, exist_ok=True)
     (output / "index").mkdir(parents=True, exist_ok=True)
     rows = 0
-    parts = 0
-    files: list[str] = []
-    for batch in pq.ParquetFile(missing).iter_batches(PART_ROWS, columns=["text_sha256", "text"]):
+    for part_offset, batch in enumerate(
+        pq.ParquetFile(missing).iter_batches(PART_ROWS, columns=["text_sha256", "text"])
+    ):
         texts = batch.column("text").to_pylist()
         keys = batch.column("text_sha256")
         vectors = np.ascontiguousarray(encoder.encode(texts).detach().cpu().numpy(), dtype=np.float32)
         if vectors.shape != (len(texts), encoder.dimension) or not np.isfinite(vectors).all():
             raise ValueError(f"invalid ensemble output shape or values: {vectors.shape}")
-        name = f"part-{start_part + parts:06d}.safetensors"
+        part = start_part + part_offset
+        name = f"part-{part:06d}.safetensors"
         index_name = Path(name).with_suffix(".parquet").name
         write_tensor(output / "vectors" / name, vectors)
         pq.write_table(
@@ -331,9 +361,31 @@ def encode_missing_to_parts(
             output / "index" / index_name,
             compression="zstd",
         )
-        files.extend((f"vectors/{name}", f"index/{index_name}"))
+        files = [f"vectors/{name}", f"index/{index_name}"]
+        descriptor = {
+            "groups": 0,
+            "input_row_start": rows,
+            "part": part,
+            "rows": len(texts),
+            "dimension": encoder.dimension,
+            "files": files,
+            "checksums": {name: sha256_file(output / name) for name in files},
+        }
+        yield descriptor
         rows += len(texts)
+
+
+def encode_missing_to_parts(
+    missing: Path, output: Path, encoder: TextEncoder, *, start_row: int = 0, start_part: int = 0
+) -> dict[str, Any]:
+    """Encode all missing texts through the resumable per-part implementation."""
+    rows = 0
+    parts = 0
+    files: list[str] = []
+    for descriptor in iter_encode_missing_parts(missing, output, encoder, start_row=start_row, start_part=start_part):
+        rows += descriptor["rows"]
         parts += 1
+        files.extend(descriptor["files"])
     return {"groups": 0, "rows": rows, "parts": parts, "dimension": encoder.dimension, "files": files}
 
 

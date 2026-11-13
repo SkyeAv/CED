@@ -357,7 +357,10 @@ def _save_checkpoint(path: Path, payload: dict[str, Any]) -> None:
     temporary = path.with_suffix(".tmp")
     torch.save(payload, temporary)
     temporary.replace(path)
-    (path.parent / "checkpoint.sha256").write_text(f"{sha256_file(path)}  {path.name}\n", encoding="utf-8")
+    checksum = path.parent / "checkpoint.sha256"
+    checksum_temporary = checksum.with_suffix(".tmp")
+    checksum_temporary.write_text(f"{sha256_file(path)}  {path.name}\n", encoding="utf-8")
+    checksum_temporary.replace(checksum)
     atomic_write_json(
         path.parent / "checkpoint.json",
         {key: payload[key] for key in ("epoch", "cursor", "config_hash", "metrics", "device") if key in payload},
@@ -374,6 +377,7 @@ def train_batches(
     device: Device = "auto",
     selected_indices: Sequence[int] | None = None,
     start_cursor: int = 0,
+    global_cursor: int | None = None,
     max_batches: int | None = None,
     auxiliary_weight: float = 0.1,
     attribute_weight: float = 0.1,
@@ -403,14 +407,17 @@ def train_batches(
         auxiliary_weight=auxiliary_weight,
         attribute_weight=attribute_weight,
     )
+    requested_start_cursor = start_cursor
     metrics: dict[str, float] = {"loss": 0.0, "batches": 0.0}
     total = 0.0
     trained = 0
     reductions = 0
     start_epoch = 0
     start_cursor = 0
+    restored: dict[str, Any] | None = None
     if checkpoint_path is not None and checkpoint_path.is_file():
         restored = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        assert restored is not None
         if restored.get("config_hash") != identity:
             raise ValueError("checkpoint configuration does not match requested run")
         model.load_state_dict(restored["state"])
@@ -474,7 +481,16 @@ def train_batches(
                 reductions += 1
 
     if selected_indices is not None:
-        run_indices(list(selected_indices)[start_cursor:])
+        if restored:
+            restored_global_cursor = int(restored["cursor"])
+            if global_cursor is not None and restored_global_cursor != global_cursor:
+                raise ValueError(
+                    f"checkpoint global cursor {restored_global_cursor} does not match group start {global_cursor}"
+                )
+            current_cursor = restored_global_cursor if global_cursor is None else global_cursor
+        else:
+            current_cursor = requested_start_cursor if global_cursor is None else global_cursor
+        run_indices(list(selected_indices)[requested_start_cursor:])
     else:
         for epoch in range(start_epoch, epochs):
             current_epoch = epoch
