@@ -122,7 +122,7 @@ Each report contains clinical/genomic profile, cluster assignment and robustness
 
 Outputs: global/family ranking tables, observed evidence, exclusions, calibration predictions/metrics, and 24 concise family scorecards.
 
-## 6. Main deliverable C: explain predictions and test the GNN's contribution
+## 6. Stretch deliverable C: explain predictions and test the GNN's contribution
 
 Keep the explanation workload small and clinically readable:
 
@@ -137,19 +137,6 @@ Every explanation needs a named target, source IDs, baseline/masking definition,
 Compare the GNN against relation-specific popularity, raw-feature/nearest-family similarity, text-only, and no-message-passing baselines. Report exact filtered MRR/Hits with support for CED-family and treatment targets. Use fixed held-out splits and show family-held-out results separately from ordinary statement holdout. Predefine baseline clinical/genomic inputs available for held-out-family inference; target treatment information stays excluded.
 
 Keep evaluated models separate from a later all-edge descriptive refit used for the final atlas and hypothesis tables. Do not attach held-out metrics to a model that already trained on those targets.
-
-## 7. Supplement: future-patient JSON matching
-
-Provide a small, version-pinned GA4GH Phenopacket JSON adapter with one synthetic example. Support HPO present/excluded findings, missingness, TGFB1 variants, measurements/units, anatomy, onset, and provenance.
-
-- Map the record into the same named clinical/genomic feature vocabulary used for family profiles.
-- Return nearest families, subtype similarities, shared findings, mismatches, and an abstention when terminology coverage or similarity is inadequate.
-- Optionally use a deterministic clinical-text template with the same pinned Sentence Transformers model for both patient and family text. Compare like representations; do not directly compare GNN and text vectors from different spaces.
-- Validate key-order invariance, excluded versus missing phenotypes, unknown terms, and out-of-distribution inputs. Set abstention thresholds using held-out data, not a favorable demonstration.
-- A family with 40% hearing loss does not specify which other findings occurred in the affected individuals. Do not invent individual profiles from family averages.
-- Until external individual-level CED data exist, label outputs as research similarity/membership scores, not calibrated patient subtype or treatment-response probabilities.
-
-This prototype demonstrates a future workflow. It is not necessary to establish diagnostic accuracy for the main exploratory paper.
 
 ## 8. Paper package and artifacts
 
