@@ -316,9 +316,6 @@ def train_step(
     statement_id = _load(graph.statement_id, root, device)
     positive = _load(graph.positive_statement_id, root, device)
     global_nodes = _load(graph.global_node_id, root, device)
-    edge_index, relation_id, edge_type_id, statement_id = _subsample(
-        edge_index, relation_id, edge_type_id, statement_id, memory_reduction, supervision=positive
-    )
     unique_statements = torch.unique(statement_id)
     selected = _supervision_mask(positive, unique_statements)
     positive = positive[selected]
@@ -329,6 +326,9 @@ def train_step(
     negative_subject = _load(graph.negative.subject, root, device)[selected]
     negative_object = _load(graph.negative.object, root, device)[selected]
     negative_valid = _load(graph.negative.valid, root, device)[selected]
+    edge_index, relation_id, edge_type_id, statement_id = _subsample(
+        edge_index, relation_id, edge_type_id, statement_id, memory_reduction, supervision=positive
+    )
     context = (
         torch.autocast("cuda", dtype=torch.bfloat16)
         if use_bf16 and device.type == "cuda"
