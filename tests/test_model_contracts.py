@@ -425,6 +425,29 @@ def test_selected_training_resume_uses_group_local_cursor(
             global_cursor=3,
         )
 
+    future = tmp_path / "future.pt"
+    train_batches(
+        root,
+        epochs=2,
+        seed=1,
+        checkpoint_path=future,
+        device="cpu",
+        selected_indices=[0],
+        start_epoch=1,
+        global_cursor=0,
+    )
+    with pytest.raises(ValueError, match="checkpoint epoch 1 exceeds requested epoch 0"):
+        train_batches(
+            root,
+            epochs=2,
+            seed=1,
+            checkpoint_path=future,
+            device="cpu",
+            selected_indices=[0],
+            start_epoch=0,
+            global_cursor=0,
+        )
+
 
 def test_random_text_encoder_is_deterministic_and_normalized() -> None:
     torch = pytest.importorskip("torch")

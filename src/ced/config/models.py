@@ -26,7 +26,7 @@ class RetryPolicy(ConfigBase):
 class ModalSettings(ConfigBase):
     gpu: str = "L40S"
     timeout_seconds: int = Field(default=86_400, gt=0)
-    single_use_containers: bool = True
+    single_use_containers: bool = False
     cpu: float = Field(default=8, gt=0)
     memory_mb: int = Field(default=65_536, gt=0)
     max_shared_bytes: int = Field(default=64 * 1024**3, gt=0)

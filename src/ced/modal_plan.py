@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.config.models import RuntimeConfig
 from ced.kg.audit import validate_checksums
+from ced.model.schemas import TrainingExample
 
 SHARED_TRAINING_FILES = (
     "manifest.json",
@@ -64,6 +65,7 @@ class TransferPlan:
     shared: dict[str, Path]
     groups: list[BatchGroup] = field(default_factory=list)
     shared_bytes: int = 0
+    edge_type_count: int | None = None
 
     @property
     def total_bytes(self) -> int:
@@ -149,9 +151,13 @@ def dataset_transfer_plan(root: Path, runtime: RuntimeConfig, mode: str) -> Tran
             f"shared transfer size {shared_bytes} exceeds {runtime.modal.max_shared_bytes}; reduce feature payload or rotate it explicitly"
         )
     groups: list[BatchGroup] = []
+    edge_type_count: int | None = None
     if mode == "train":
         current = BatchGroup(indices=[], files={}, bytes=0)
         for index, example in enumerate(manifest["batches"]):
+            graph = TrainingExample.model_validate(example).graph
+            largest_type = int(graph.edge_type_id.load(root).max())
+            edge_type_count = max(edge_type_count or 0, largest_type + 1)
             files = {path: root / path for path in _tensor_paths(example)}
             size = sum(path.stat().st_size for path in files.values())
             if size > runtime.modal.max_batch_group_bytes:
@@ -166,7 +172,14 @@ def dataset_transfer_plan(root: Path, runtime: RuntimeConfig, mode: str) -> Tran
             current.bytes += size
         if current.files:
             groups.append(current)
-    return TransferPlan(mode=mode, root=root, shared=shared, groups=groups, shared_bytes=shared_bytes)
+    return TransferPlan(
+        mode=mode,
+        root=root,
+        shared=shared,
+        groups=groups,
+        shared_bytes=shared_bytes,
+        edge_type_count=edge_type_count,
+    )
 
 
 def _upload(volume: VolumeClient, runtime: RuntimeConfig, files: Mapping[str, Path], prefix: str) -> None:
@@ -242,6 +255,15 @@ def validate_checkpoint(
     return actual
 
 
+def _checkpoint_group_dir(epoch: int, group: int) -> str:
+    prefix = f"epoch-{epoch:05d}/" if epoch else ""
+    return f"checkpoints/{prefix}group-{group:05d}"
+
+
+def _checkpoint_relative_path(epoch: int, group: int) -> str:
+    return f"{_checkpoint_group_dir(epoch, group)}/checkpoint.pt"
+
+
 def _read_training_progress(plan: TransferPlan, run_root: Path) -> list[TrainingProgressRow]:
     path = run_root / "progress.parquet"
     if not path.is_file():
@@ -251,10 +273,13 @@ def _read_training_progress(plan: TransferPlan, run_root: Path) -> list[Training
         raise ValueError(f"training progress schema mismatch: {path}")
     rows = [TrainingProgressRow.model_validate(row) for row in table.to_pylist()]
     for position, row in enumerate(rows):
-        if position >= len(plan.groups) or row.group_index != position:
+        if not plan.groups:
+            raise ValueError("training progress exists for an empty batch plan")
+        epoch, group_index = divmod(position, len(plan.groups))
+        if row.group_index != group_index or row.epoch != epoch:
             raise ValueError("training progress groups are missing, duplicated, or out of order")
-        expected = plan.groups[position]
-        expected_path = f"checkpoints/group-{position:05d}/checkpoint.pt"
+        expected = plan.groups[group_index]
+        expected_path = _checkpoint_relative_path(epoch, group_index)
         if (
             row.run_id != run_root.name
             or row.batch_start != min(expected.indices)
@@ -321,10 +346,14 @@ def execute_plan(
     progress_rows: list[TrainingProgressRow] = []
     identity = ""
     if plan.mode == "train":
+        if epochs < 1:
+            raise ValueError("epochs must be positive")
         protected = {
             "root",
             "selected_indices",
+            "start_epoch",
             "start_cursor",
+            "edge_type_count",
             "max_batches",
             "global_cursor",
             "config_sha256",
@@ -363,7 +392,7 @@ def execute_plan(
             assert adopt_encoded is not None
             remote = "outputs/encode"
             payload = {
-                "root": "/scratch/text-encoding",
+                "root": "/data/dataset",
                 "output_prefix": f"/data/{remote}",
                 **(payload_overrides or {}),
             }
@@ -410,7 +439,7 @@ def execute_plan(
                 lambda: runner.call(
                     "evaluate",
                     {
-                        "root": "/scratch/dataset",
+                        "root": "/data/dataset",
                         "output_prefix": f"/data/{remote}",
                         "seed": seed,
                         "checkpoint_path": "/scratch/checkpoint.pt",
@@ -422,23 +451,48 @@ def execute_plan(
             metrics.update(result)
             return metrics
         total = sum(len(group.indices) for group in plan.groups)
-        metrics.update({"cursor": cursor, "groups": len(progress_rows), "total_batches": total})
+        if not plan.groups:
+            raise ValueError("dataset contains no training batches")
+        if plan.edge_type_count is None:
+            raise ValueError("training plan has no edge type metadata")
+        metrics.update(
+            {
+                "cursor": cursor,
+                "groups": len(progress_rows),
+                "total_batches": total,
+                "epoch": len(progress_rows) // len(plan.groups),
+                "total_epochs": epochs,
+            }
+        )
         if progress_rows:
             latest_root = (run_root / progress_rows[-1].checkpoint_path).parent
             metrics.update(json.loads((latest_root / "metrics.json").read_text()))
-            metrics.update({"groups": len(progress_rows), "total_batches": total})
-        for number, group in enumerate(plan.groups):
+            metrics.update(
+                {
+                    "groups": len(progress_rows),
+                    "total_batches": total,
+                    "epoch": len(progress_rows) // len(plan.groups),
+                    "total_epochs": epochs,
+                }
+            )
+        total_steps = epochs * len(plan.groups)
+        if len(progress_rows) > total_steps:
+            raise ValueError("training progress exceeds the requested epochs")
+        for step in range(len(progress_rows), total_steps):
+            epoch, number = divmod(step, len(plan.groups))
+            group = plan.groups[number]
+            epoch_prefix = f"epoch-{epoch:05d}/" if epoch else ""
             group_start = min(group.indices)
-            if number < len(progress_rows):
-                continue
             local_start = 0
             remaining = len(group.indices)
             _upload(volume, runtime, group.files, "dataset")
-            remote = f"outputs/group-{number:05d}"
+            remote = f"outputs/{epoch_prefix}group-{number:05d}"
             payload = {
-                "root": "/scratch/dataset",
+                "root": "/data/dataset",
                 "selected_indices": group.indices,
+                "start_epoch": epoch,
                 "start_cursor": local_start,
+                "edge_type_count": plan.edge_type_count,
                 "max_batches": remaining,
                 "global_cursor": group_start,
                 "config_sha256": identity,
@@ -450,7 +504,7 @@ def execute_plan(
                 **(payload_overrides or {}),
             }
             result = _retry(runtime, lambda payload=payload: runner.call("train_group", payload))
-            group_root = run_root / "checkpoints" / f"group-{number:05d}"
+            group_root = run_root / _checkpoint_group_dir(epoch, number)
             staging = group_root.with_name(f"{group_root.name}.partial")
             if staging.exists():
                 shutil.rmtree(staging)
@@ -462,8 +516,12 @@ def execute_plan(
                 ["metrics.json", "checkpoint.pt", "checkpoint.sha256", "checkpoint.json"],
             )
             expected_cursor = max(group.indices) + 1
-            if int(result.get("cursor", -1)) != expected_cursor or int(result.get("consumed", -1)) != remaining:
-                raise ValueError(f"training group {number} did not complete its expected batch range")
+            if (
+                int(result.get("cursor", -1)) != expected_cursor
+                or int(result.get("consumed", -1)) != remaining
+                or int(result.get("epoch", -1)) != epoch
+            ):
+                raise ValueError(f"training group {number} did not complete its expected epoch and batch range")
             if json.loads((staging / "metrics.json").read_text()) != result:
                 raise ValueError(f"training group {number} returned mismatched metrics")
             digest = validate_checkpoint(staging, identity, result)
@@ -476,10 +534,10 @@ def execute_plan(
                     group_index=number,
                     batch_start=group_start,
                     batch_end=expected_cursor,
-                    epoch=int(result.get("epoch", 0)),
+                    epoch=epoch,
                     cursor=expected_cursor,
                     config_sha256=identity,
-                    checkpoint_path=str((group_root / "checkpoint.pt").relative_to(run_root)),
+                    checkpoint_path=_checkpoint_relative_path(epoch, number),
                     checkpoint_sha256=digest,
                 )
             )
@@ -494,8 +552,11 @@ def execute_plan(
             metrics["groups"] = len(progress_rows)
             metrics["cursor"] = cursor
             metrics["total_batches"] = total
+            metrics["epoch"] = len(progress_rows) // len(plan.groups)
+            metrics["total_epochs"] = epochs
         return metrics
     finally:
         _retry(runtime, lambda: volume.remove("dataset", recursive=True))
         _retry(runtime, lambda: volume.remove("outputs", recursive=True))
-        _retry(runtime, lambda: volume.remove("checkpoint.pt"))
+        for name in ("checkpoint.pt", "checkpoint.sha256", "checkpoint.json"):
+            _retry(runtime, lambda name=name: volume.remove(name))
