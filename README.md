@@ -38,6 +38,7 @@ Important environment variables:
 | `CED_MEMORY_LIMIT` | Process memory budget for canonicalization, merge, and reports |
 | `CED_DISK_RESERVE_GB` | Minimum free disk before downloads/builds |
 | `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` | Modal credentials, only in the untracked wenceslaus `.envrc` or environment |
+| `HF_TOKEN` | Hugging Face write token for `SkyeAv/ced`, only in the untracked wenceslaus `.envrc` or environment |
 
 ## Commands
 
@@ -57,6 +58,8 @@ ced encode-publications <dataset-id> --download --yes
 ced train <dataset-id> --epochs 1 --seed 20261110 --yes
 ced train <dataset-id> --resume <run-id> --yes
 ced evaluate <run-id> --split test --ranking exact --yes
+ced publish --snapshot <snapshot-id>
+ced publish --dataset <dataset-id>
 ```
 
 `ced check` runs the full remote gate: `uv lock --check`, Ruff, Pyright, pytest, and strict YAML lint. The gate runs pytest with four xdist workers and one thread per worker, excludes `network`, `gpu`, `fullmap`, and `perf` tests by default, and fails below 90% coverage of `src/ced` (`pytest-cov`, configured in `pyproject.toml`); use `uv run pytest -n 0` remotely for serial debugging. The prek pre-push hook runs this gate on wenceslaus. On the laptop, run `ced check` first and use `git push --no-verify` so no check executes locally.
@@ -107,6 +110,12 @@ Adding a compatible KGX, Translator-release, Hugging Face, direct-URL, archive, 
 7. Build or prepare only when the user explicitly approves that operation.
 
 Source YAML owns URLs, artifact selection, field mappings, licenses, and source-specific semantics. Python owns reusable acquisition, canonical records, merging, tensors, and models.
+
+## Hugging Face publication
+
+`ced build`, `ced prepare`, and `ced encode-text` publish to `SkyeAv/ced` by default; pass `--no-upload` to keep artifacts local. Build uploads the complete post-QC snapshot to `graph/<snapshot-id>`, including isolated trees, canonical tables, KGX exports, provenance, checksums, and reports, while excluding raw staging and spill files. Preparation and text encoding upload to `encoded/<dataset-id>`, including the isolated-tree pruning report, Parquet topology/features, safetensors, batch shards, and the portable `text-<encoder>/` artifact, whose manifest is retained per encoder as an immutable copy.
+
+`src/ced/publication.py` regenerates `README.md` from completed local manifests on every upload. Its YAML maps the Parquet tables to `graph` and `encoded` splits, for example `load_dataset("SkyeAv/ced", "graph-nodes", split="graph")` and `load_dataset("SkyeAv/ced", "encoded-topology", split="encoded")`. Use `ced publish --snapshot <snapshot-id>` or `ced publish --dataset <dataset-id>` to resume a failed upload without rebuilding. Tests mock the Hub and never upload artifacts.
 
 ## Modal workflow
 
