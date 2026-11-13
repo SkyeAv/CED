@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable, Mapping
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from ced.acquisition.base import atomic_write_json
+from ced.acquisition.base import sha256_file
 from ced.config.models import ModalSettings, RuntimeConfig
 from ced.modal_plan import TransferPlan, _retry, dataset_transfer_plan, execute_plan, prepare_run_directory
 
@@ -46,6 +47,7 @@ class FakeRunner:
     def __init__(self, volume: FakeVolume) -> None:
         self.volume = volume
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.checkpoint_inputs: list[bytes | None] = []
 
     def stream(self, function: str, payload: dict[str, Any]):
         raise AssertionError("stream is only used by encoding test runners")
@@ -54,17 +56,33 @@ class FakeRunner:
         self.calls.append((function, payload))
         prefix = str(payload["output_prefix"]).removeprefix("/data/")
         selected = payload.get("selected_indices") or []
+        if function == "train_group":
+            self.checkpoint_inputs.append(self.volume.files.get("checkpoint.pt"))
         start = int(payload.get("start_cursor", 0))
+        global_start = int(payload.get("global_cursor", (min(selected) if selected else 0) + start))
+        consumed = len(selected) - start
         metrics = {
-            "cursor": start + len(selected),
-            "batches": float(len(selected)),
+            "epoch": 0.0,
+            "cursor": global_start + consumed,
+            "consumed": float(consumed),
+            "batches": float(consumed),
             "loss": 0.5,
             "ranking": payload.get("ranking", "exact"),
         }
+        checkpoint = f"checkpoint-{metrics['cursor']}".encode()
+        metadata = {
+            "epoch": 0,
+            "cursor": metrics["cursor"],
+            "config_hash": payload.get("config_sha256", "test-config"),
+            "metrics": metrics,
+            "device": "cpu",
+        }
         self.volume.files[f"{prefix}/metrics.json"] = json.dumps(metrics).encode()
-        self.volume.files[f"{prefix}/checkpoint.pt"] = b"checkpoint"
-        self.volume.files[f"{prefix}/checkpoint.sha256"] = b"digest"
-        self.volume.files[f"{prefix}/checkpoint.json"] = json.dumps({"cursor": metrics["cursor"]}).encode()
+        self.volume.files[f"{prefix}/checkpoint.pt"] = checkpoint
+        self.volume.files[f"{prefix}/checkpoint.sha256"] = (
+            f"{hashlib.sha256(checkpoint).hexdigest()}  checkpoint.pt\n".encode()
+        )
+        self.volume.files[f"{prefix}/checkpoint.json"] = json.dumps(metadata).encode()
         return metrics
 
 
@@ -79,6 +97,8 @@ def runtime(tmp_path: Path, **modal: Any) -> RuntimeConfig:
 
 
 def test_modal_plan_rotates_bounded_batches(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
+    import pyarrow.parquet as pq
+
     root = tmp_path / "dataset"
     batch_bytes = synthetic_dataset(root, batches=3)
     config = runtime(tmp_path, max_shared_bytes=1024**3, max_batch_group_bytes=batch_bytes * 2 + 16)
@@ -94,21 +114,65 @@ def test_modal_plan_rotates_bounded_batches(tmp_path: Path, synthetic_dataset: C
     assert metrics["cursor"] == 3
     assert metrics["groups"] == 2
     assert [payload["start_cursor"] for _, payload in runner.calls] == [0, 0]
-    assert (run_root / "checkpoint.pt").read_bytes() == b"checkpoint"
-    assert json.loads((run_root / "progress.json").read_text())["cursor"] == 3
+    assert [payload["global_cursor"] for _, payload in runner.calls] == [0, 2]
+    assert runner.checkpoint_inputs == [None, b"checkpoint-2"]
+    assert (run_root / "checkpoint.pt").read_bytes() == b"checkpoint-3"
+    assert sha256_file(run_root / "checkpoint.pt") == (run_root / "checkpoint.sha256").read_text().split()[0]
+    progress = pq.read_table(run_root / "progress.parquet")
+    assert progress.column_names == [
+        "run_id",
+        "group_index",
+        "batch_start",
+        "batch_end",
+        "epoch",
+        "cursor",
+        "config_sha256",
+        "checkpoint_path",
+        "checkpoint_sha256",
+    ]
+    assert progress.column("group_index").to_pylist() == [0, 1]
+    assert progress.column("batch_end").to_pylist() == [2, 3]
+    assert progress.column("checkpoint_path").to_pylist() == [
+        "checkpoints/group-00000/checkpoint.pt",
+        "checkpoints/group-00001/checkpoint.pt",
+    ]
+    assert not (run_root / "progress.json").exists()
     assert not any(key.startswith("dataset/batches") for key in volume.files)
     assert not any(key.startswith("outputs") for key in volume.files)
 
 
-def test_modal_plan_resumes_from_progress(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
+def test_training_resume_uses_relational_completed_groups(
+    tmp_path: Path, synthetic_dataset: Callable[..., int]
+) -> None:
+    """Only ledger-complete groups are skipped, and each group gets the latest checkpoint.
+
+    Why: JSON cursor-only resume mixed global and group-local offsets and could
+    upload the same stale checkpoint to every group. A failed second group must
+    leave the first immutable checkpoint and relational record as the sole resume
+    boundary, with no repeated GPU work on the completed prefix.
+    """
+    import pyarrow.parquet as pq
+
     root = tmp_path / "dataset"
     batch_bytes = synthetic_dataset(root, batches=3)
     config = runtime(tmp_path, max_shared_bytes=1024**3, max_batch_group_bytes=batch_bytes * 2 + 16)
     plan = dataset_transfer_plan(root, config, "train")
     run_root = tmp_path / "run"
     run_root.mkdir()
-    (run_root / "checkpoint.pt").write_bytes(b"old")
-    atomic_write_json(run_root / "progress.json", {"cursor": 2, "groups": 1})
+
+    class FailSecondGroup(FakeRunner):
+        def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]:
+            if payload.get("selected_indices") == [2]:
+                raise RuntimeError("injected second-group failure")
+            return super().call(function, payload)
+
+    failing_volume = FakeVolume()
+    with pytest.raises(RuntimeError, match="injected second-group failure"):
+        execute_plan(plan, config, failing_volume, FailSecondGroup(failing_volume), run_root, epochs=1, seed=7)
+    progress = pq.read_table(run_root / "progress.parquet")
+    assert progress.column("group_index").to_pylist() == [0]
+    assert (run_root / "checkpoint.pt").read_bytes() == b"checkpoint-2"
+
     volume = FakeVolume()
     runner = FakeRunner(volume)
     metrics = execute_plan(plan, config, volume, runner, run_root, epochs=1, seed=7)
@@ -116,7 +180,143 @@ def test_modal_plan_resumes_from_progress(tmp_path: Path, synthetic_dataset: Cal
     payload = runner.calls[0][1]
     assert payload["selected_indices"] == [2]
     assert payload["start_cursor"] == 0
+    assert payload["global_cursor"] == 2
+    assert runner.checkpoint_inputs == [b"checkpoint-2"]
     assert metrics["cursor"] == 3
+    assert metrics["groups"] == 2
+    assert pq.read_table(run_root / "progress.parquet").num_rows == 2
+
+
+@pytest.mark.parametrize(
+    ("mutation", "match"), [("config", "configuration mismatch"), ("checksum", "checksum mismatch")]
+)
+def test_training_resume_rejects_invalid_checkpoint(
+    tmp_path: Path, synthetic_dataset: Callable[..., int], mutation: str, match: str
+) -> None:
+    """A ledger cannot make a corrupt or incompatible checkpoint resumable.
+
+    Why: paid resume validates both content and configuration identity before any
+    new group call. Otherwise corrupted state could silently poison later groups.
+    """
+    root = tmp_path / "dataset"
+    synthetic_dataset(root, batches=1)
+    config = runtime(tmp_path)
+    plan = dataset_transfer_plan(root, config, "train")
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    volume = FakeVolume()
+    execute_plan(plan, config, volume, FakeRunner(volume), run_root, seed=7)
+    group = run_root / "checkpoints" / "group-00000"
+    if mutation == "config":
+        metadata = json.loads((group / "checkpoint.json").read_text())
+        metadata["config_hash"] = "0" * 64
+        (group / "checkpoint.json").write_text(json.dumps(metadata))
+    else:
+        (group / "checkpoint.pt").write_bytes(b"corrupt")
+
+    runner = FakeRunner(FakeVolume())
+    with pytest.raises(ValueError, match=match):
+        execute_plan(plan, config, runner.volume, runner, run_root, seed=7)
+    assert runner.calls == []
+
+
+@pytest.mark.parametrize("field", ["config_sha256", "global_cursor", "selected_indices", "seed"])
+def test_training_rejects_protected_payload_overrides(
+    tmp_path: Path, synthetic_dataset: Callable[..., int], field: str
+) -> None:
+    """Protected orchestration overrides fail before uploads or GPU calls."""
+    root = tmp_path / "dataset"
+    synthetic_dataset(root, batches=1)
+    config = runtime(tmp_path)
+    plan = dataset_transfer_plan(root, config, "train")
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    volume = FakeVolume()
+    runner = FakeRunner(volume)
+    with pytest.raises(ValueError, match="protected orchestration fields"):
+        execute_plan(plan, config, volume, runner, run_root, payload_overrides={field: "invalid"})
+    assert not volume.files
+    assert not runner.calls
+
+
+def test_training_resume_rejects_changed_seed(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
+    """A changed seed cannot resume a previously completed checkpoint lineage."""
+    root = tmp_path / "dataset"
+    synthetic_dataset(root, batches=1)
+    config = runtime(tmp_path)
+    plan = dataset_transfer_plan(root, config, "train")
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    volume = FakeVolume()
+    execute_plan(plan, config, volume, FakeRunner(volume), run_root, seed=7)
+    runner = FakeRunner(FakeVolume())
+    with pytest.raises(ValueError, match="configuration mismatch"):
+        execute_plan(plan, config, runner.volume, runner, run_root, seed=8)
+    assert not runner.calls
+    assert not runner.volume.files
+
+
+def test_training_partial_download_preserves_last_complete_group(
+    tmp_path: Path, synthetic_dataset: Callable[..., int]
+) -> None:
+    """A partial next checkpoint cannot replace the last durable group.
+
+    Why: download failures happen after GPU computation. Staging, checksum
+    validation, and the completed-row ledger must prevent that partial file from
+    becoming the next resume input, while preserving the previous GPU result.
+    """
+    import pyarrow.parquet as pq
+
+    root = tmp_path / "dataset"
+    batch_bytes = synthetic_dataset(root, batches=3)
+    config = runtime(tmp_path, max_shared_bytes=1024**3, max_batch_group_bytes=batch_bytes * 2 + 16)
+    plan = dataset_transfer_plan(root, config, "train")
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+
+    class PartialSecondDownload(FakeVolume):
+        def download(self, remote: str, local: Path) -> None:
+            if remote == "outputs/group-00001/checkpoint.pt":
+                local.parent.mkdir(parents=True, exist_ok=True)
+                local.write_bytes(b"partial")
+                raise RuntimeError("injected partial checkpoint download")
+            super().download(remote, local)
+
+    volume = PartialSecondDownload()
+    with pytest.raises(RuntimeError, match="injected partial checkpoint download"):
+        execute_plan(plan, config, volume, FakeRunner(volume), run_root, seed=7)
+    assert pq.read_table(run_root / "progress.parquet").column("group_index").to_pylist() == [0]
+    assert (run_root / "checkpoint.pt").read_bytes() == b"checkpoint-2"
+    assert (run_root / "checkpoints" / "group-00001.partial" / "checkpoint.pt").read_bytes() == b"partial"
+
+    resumed_volume = FakeVolume()
+    runner = FakeRunner(resumed_volume)
+    execute_plan(plan, config, resumed_volume, runner, run_root, seed=7)
+    assert len(runner.calls) == 1
+    assert runner.calls[0][1]["selected_indices"] == [2]
+    assert runner.checkpoint_inputs == [b"checkpoint-2"]
+    assert pq.read_table(run_root / "progress.parquet").num_rows == 2
+
+
+def test_training_resume_rejects_non_contiguous_progress(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
+    """Missing or reordered ledger groups fail instead of selecting wrong work."""
+    import pyarrow.parquet as pq
+
+    root = tmp_path / "dataset"
+    batch_bytes = synthetic_dataset(root, batches=3)
+    config = runtime(tmp_path, max_shared_bytes=1024**3, max_batch_group_bytes=batch_bytes * 2 + 16)
+    plan = dataset_transfer_plan(root, config, "train")
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    volume = FakeVolume()
+    execute_plan(plan, config, volume, FakeRunner(volume), run_root, seed=7)
+    progress = pq.read_table(run_root / "progress.parquet")
+    pq.write_table(progress.slice(1), run_root / "progress.parquet")
+
+    runner = FakeRunner(FakeVolume())
+    with pytest.raises(ValueError, match="missing, duplicated, or out of order"):
+        execute_plan(plan, config, runner.volume, runner, run_root, seed=7)
+    assert runner.calls == []
 
 
 def test_modal_plan_rejects_oversized_batch(tmp_path: Path, synthetic_dataset: Callable[..., int]) -> None:
@@ -166,9 +366,72 @@ def test_prepare_run_directory_stamps_config_and_is_unique(
     recorded = json.loads((run / "run-config.json").read_text())
     assert recorded["dataset"] == "synthetic"
     assert recorded["mode"] == "train"
+    assert recorded["run_id"] == run.name
     assert recorded["modal"]["gpu"] == "L40S"
     with pytest.raises(FileExistsError):
         prepare_run_directory(config, "synthetic", "train")
+
+
+def test_train_remote_resume_reuses_run_and_validates_before_paid(
+    tmp_path: Path, synthetic_dataset: Callable[..., int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Resume preflight precedes paid approval and never allocates a new run ID.
+
+    Why: the old path copied sidecars from `.ced/runs` instead of the selected run
+    and confirmed payment before validating resume state. Continuing the original
+    directory keeps its relational ledger and checkpoint lineage authoritative.
+    """
+    import ced.modal_app as modal_app
+
+    synthetic_dataset(runtime(tmp_path).artifact_path("datasets", "synthetic"))
+    config = runtime(tmp_path)
+    source = prepare_run_directory(config, "synthetic", "train")
+    (source / "checkpoint.pt").write_bytes(b"checkpoint")
+    (source / "progress.parquet").write_bytes(b"ledger")
+    events: list[str] = []
+    monkeypatch.setattr(modal_app, "require_cpu_worker", lambda config: None)
+    monkeypatch.setattr(
+        modal_app,
+        "validate_training_resume",
+        lambda plan, run_root, *, seed: events.append("validate"),
+    )
+    monkeypatch.setattr(modal_app, "confirm_paid", lambda *args, **kwargs: events.append("confirm"))
+
+    def unexpected_new_run(*args: object, **kwargs: object) -> Path:
+        raise AssertionError("resume allocated a new run directory")
+
+    monkeypatch.setattr(modal_app, "prepare_run_directory", unexpected_new_run)
+    volume = FakeVolume()
+    monkeypatch.setattr(modal_app.modal.Volume, "ephemeral", lambda **kwargs: nullcontext(volume))
+    monkeypatch.setattr(
+        modal_app, "create_app", lambda *args, **kwargs: (SimpleNamespace(run=lambda: nullcontext()), {})
+    )
+    executed: list[Path] = []
+
+    def fake_execute(
+        _plan: TransferPlan,
+        _runtime: RuntimeConfig,
+        _adapter: object,
+        _runner: object,
+        run_root: Path,
+        **kwargs: object,
+    ) -> dict[str, Any]:
+        executed.append(run_root)
+        return {"mode": "train", "groups": 0, "cursor": 0}
+
+    monkeypatch.setattr(modal_app, "execute_plan", fake_execute)
+    result = modal_app.train_remote(config, "synthetic", assume_yes=True, seed=7, resume=source.name)
+    assert result == source
+    assert executed == [source]
+    assert events == ["validate", "confirm"]
+    assert (source / "metrics.json").is_file()
+
+    recorded = json.loads((source / "run-config.json").read_text())
+    recorded["run_id"] = "different-run"
+    (source / "run-config.json").write_text(json.dumps(recorded))
+    with pytest.raises(ValueError, match="resume run identity"):
+        modal_app.train_remote(config, "synthetic", assume_yes=True, seed=7, resume=source.name)
+    assert events == ["validate", "confirm"]
 
 
 def synthetic_dataset_root(tmp_path: Path, builder: Callable[..., int]) -> Path:

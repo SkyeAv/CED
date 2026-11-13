@@ -20,6 +20,8 @@ from ced.modal_plan import (
     dataset_transfer_plan,
     execute_plan,
     prepare_run_directory,
+    validate_checkpoint,
+    validate_training_resume,
 )
 from ced.preflight import require_cpu_worker
 
@@ -134,21 +136,27 @@ def create_app(
         metrics = train_batches(
             root,
             epochs=payload["epochs"],
+            learning_rate=payload.get("learning_rate", 1e-3),
             seed=payload["seed"],
             checkpoint_path=Path(payload["checkpoint_path"]),
             device=payload.get("device", "cuda"),
             selected_indices=payload["selected_indices"],
             start_cursor=payload["start_cursor"],
+            global_cursor=payload.get("global_cursor"),
             max_batches=payload["max_batches"],
+            auxiliary_weight=payload.get("auxiliary_weight", 0.1),
+            attribute_weight=payload.get("attribute_weight", 0.1),
         )
+        checkpoint = Path(payload["checkpoint_path"])
+        validate_checkpoint(checkpoint.parent, payload["config_sha256"], metrics)
         output = Path(payload["output_prefix"])
         atomic_write_json(output / "metrics.json", metrics)
-        checkpoint = Path(payload["checkpoint_path"])
         shutil.copy2(checkpoint, output / "checkpoint.pt")
         for name in ("checkpoint.sha256", "checkpoint.json"):
             source = checkpoint.parent / name
             if source.exists():
                 shutil.copy2(source, output / name)
+        validate_checkpoint(output, payload["config_sha256"], metrics)
         volume.commit()
         return metrics
 
@@ -281,18 +289,15 @@ def train_remote(
     require_cpu_worker(runtime)
     root = runtime.artifact_path("datasets", dataset)
     plan = dataset_transfer_plan(root, runtime, "train")
-    confirm_paid(plan, runtime, assume_yes=assume_yes)
-    run_root = prepare_run_directory(runtime, dataset, "train")
     if resume:
-        source = runtime.artifact_path("runs", resume)
-        checkpoint = source / "checkpoint.pt"
-        if not checkpoint.is_file():
-            raise FileNotFoundError(f"resume checkpoint is missing: {checkpoint}")
-        shutil.copy2(checkpoint, run_root / "checkpoint.pt")
-        for name in ("checkpoint.sha256", "checkpoint.json", "progress.json"):
-            sidecar = source.parent / name
-            if sidecar.is_file():
-                shutil.copy2(sidecar, run_root / name)
+        run_root = runtime.artifact_path("runs", resume)
+        recorded = json.loads((run_root / "run-config.json").read_text())
+        if recorded.get("dataset") != dataset or recorded.get("mode") != "train" or recorded.get("run_id") != resume:
+            raise ValueError("resume run identity does not match the requested dataset and mode")
+        validate_training_resume(plan, run_root, seed=seed)
+    else:
+        run_root = prepare_run_directory(runtime, dataset, "train")
+    confirm_paid(plan, runtime, assume_yes=assume_yes)
     with modal.Volume.ephemeral(version=2) as volume:
         app, functions = create_app(runtime, volume, f"ced-train-{run_root.name}")
         adapter = ModalVolumeAdapter(volume)

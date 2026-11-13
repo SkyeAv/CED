@@ -373,6 +373,59 @@ def test_training_checkpoint_resumes_epoch(tmp_path: Path) -> None:
     assert torch.load(checkpoint, map_location="cpu", weights_only=False)["epoch"] == 2
 
 
+def test_selected_training_resume_uses_group_local_cursor(
+    tmp_path: Path, synthetic_dataset: Callable[..., int]
+) -> None:
+    """A restored global cursor never slices a selected group by that amount.
+
+    Why: group cursors are local offsets, while checkpoints carry global progress.
+    Mixing them makes a resume after group one skip every item in group two and
+    can falsely mark training complete without doing its GPU work.
+    """
+    from ced.model.training import train_batches
+
+    root = tmp_path / "dataset"
+    synthetic_dataset(root, batches=1)
+    checkpoint = tmp_path / "checkpoint.pt"
+    first = train_batches(
+        root,
+        epochs=1,
+        seed=1,
+        checkpoint_path=checkpoint,
+        device="cpu",
+        selected_indices=[0],
+        start_cursor=0,
+        global_cursor=0,
+    )
+    assert first["consumed"] == 1
+    assert first["cursor"] == 1
+
+    second = train_batches(
+        root,
+        epochs=1,
+        seed=1,
+        checkpoint_path=checkpoint,
+        device="cpu",
+        selected_indices=[0],
+        start_cursor=0,
+        global_cursor=1,
+    )
+    assert second["consumed"] == 1
+    assert second["cursor"] == 2
+
+    with pytest.raises(ValueError, match="does not match group start 3"):
+        train_batches(
+            root,
+            epochs=1,
+            seed=1,
+            checkpoint_path=checkpoint,
+            device="cpu",
+            selected_indices=[0],
+            start_cursor=0,
+            global_cursor=3,
+        )
+
+
 def test_random_text_encoder_is_deterministic_and_normalized() -> None:
     torch = pytest.importorskip("torch")
     from ced.model.encoding import RandomTextEncoder

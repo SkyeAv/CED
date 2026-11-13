@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
@@ -9,7 +11,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from ced.acquisition.base import atomic_write_json
+import pyarrow as pa
+import pyarrow.parquet as pq
+from pydantic import BaseModel, ConfigDict, Field
+
+from ced.acquisition.base import atomic_write_json, sha256_file
 from ced.config.models import RuntimeConfig
 from ced.kg.audit import validate_checksums
 
@@ -100,7 +106,13 @@ def prepare_run_directory(runtime: RuntimeConfig, dataset: str, mode: str) -> Pa
     run.mkdir(parents=True, exist_ok=False)
     atomic_write_json(
         run / "run-config.json",
-        {"dataset": dataset, "mode": mode, "created_utc": stamp, "modal": runtime.modal.model_dump(mode="json")},
+        {
+            "dataset": dataset,
+            "mode": mode,
+            "run_id": run.name,
+            "created_utc": stamp,
+            "modal": runtime.modal.model_dump(mode="json"),
+        },
     )
     return run
 
@@ -169,6 +181,128 @@ def download_outputs(
         _retry(runtime, lambda name=name: volume.download(f"{remote_prefix}/{name}", local / name))
 
 
+class TrainingProgressRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    group_index: int = Field(ge=0)
+    batch_start: int = Field(ge=0)
+    batch_end: int = Field(gt=0)
+    epoch: int = Field(ge=0)
+    cursor: int = Field(ge=0)
+    config_sha256: str = Field(pattern="[0-9a-f]{64}")
+    checkpoint_path: str
+    checkpoint_sha256: str = Field(pattern="[0-9a-f]{64}")
+
+
+TRAINING_PROGRESS_SCHEMA = pa.schema(
+    [
+        ("run_id", pa.string()),
+        ("group_index", pa.int64()),
+        ("batch_start", pa.int64()),
+        ("batch_end", pa.int64()),
+        ("epoch", pa.int64()),
+        ("cursor", pa.int64()),
+        ("config_sha256", pa.string()),
+        ("checkpoint_path", pa.string()),
+        ("checkpoint_sha256", pa.string()),
+    ]
+)
+
+
+def _training_identity(plan: TransferPlan, seed: int, overrides: Mapping[str, Any]) -> str:
+    from ced.model.training import config_hash
+
+    document = json.loads((plan.root / "manifest.json").read_text())
+    return config_hash(
+        document,
+        learning_rate=float(overrides.get("learning_rate", 1e-3)),
+        seed=seed,
+        auxiliary_weight=float(overrides.get("auxiliary_weight", 0.1)),
+        attribute_weight=float(overrides.get("attribute_weight", 0.1)),
+    )
+
+
+def validate_checkpoint(
+    root: Path, expected_config_sha256: str, expected_metrics: Mapping[str, Any] | None = None
+) -> str:
+    """Validate one complete checkpoint directory and return its content digest."""
+    checkpoint = root / "checkpoint.pt"
+    if not checkpoint.is_file():
+        raise FileNotFoundError(f"checkpoint is missing: {checkpoint}")
+    recorded = (root / "checkpoint.sha256").read_text().split()
+    actual = sha256_file(checkpoint)
+    if not recorded or recorded[0] != actual:
+        raise ValueError(f"checkpoint checksum mismatch: {checkpoint}")
+    metadata = json.loads((root / "checkpoint.json").read_text())
+    if metadata.get("config_hash") != expected_config_sha256:
+        raise ValueError(f"checkpoint configuration mismatch: {root}")
+    if expected_metrics is not None and metadata.get("metrics") != dict(expected_metrics):
+        raise ValueError(f"checkpoint metrics mismatch: {root}")
+    return actual
+
+
+def _read_training_progress(plan: TransferPlan, run_root: Path) -> list[TrainingProgressRow]:
+    path = run_root / "progress.parquet"
+    if not path.is_file():
+        return []
+    table = pq.read_table(path)
+    if table.schema != TRAINING_PROGRESS_SCHEMA:
+        raise ValueError(f"training progress schema mismatch: {path}")
+    rows = [TrainingProgressRow.model_validate(row) for row in table.to_pylist()]
+    for position, row in enumerate(rows):
+        if position >= len(plan.groups) or row.group_index != position:
+            raise ValueError("training progress groups are missing, duplicated, or out of order")
+        expected = plan.groups[position]
+        expected_path = f"checkpoints/group-{position:05d}/checkpoint.pt"
+        if (
+            row.run_id != run_root.name
+            or row.batch_start != min(expected.indices)
+            or row.batch_end != max(expected.indices) + 1
+            or row.cursor != row.batch_end
+            or row.checkpoint_path != expected_path
+        ):
+            raise ValueError(f"training progress row {position} does not match its plan or checkpoint")
+    return rows
+
+
+def _write_training_progress(run_root: Path, rows: list[TrainingProgressRow]) -> None:
+    path = run_root / "progress.parquet"
+    temporary = path.with_suffix(f".tmp-{os.getpid()}")
+    table = pa.Table.from_pylist([row.model_dump(mode="python") for row in rows], schema=TRAINING_PROGRESS_SCHEMA)
+    pq.write_table(table, temporary, compression="zstd")
+    temporary.replace(path)
+
+
+def _publish_latest_checkpoint(run_root: Path, group_root: Path) -> None:
+    for name in ("checkpoint.pt", "checkpoint.sha256", "checkpoint.json"):
+        temporary = run_root / f".{name}.tmp-{os.getpid()}"
+        temporary.unlink(missing_ok=True)
+        os.link(group_root / name, temporary)
+        temporary.replace(run_root / name)
+
+
+def _upload_checkpoint(volume: VolumeClient, runtime: RuntimeConfig, root: Path) -> None:
+    files = {name: root / name for name in ("checkpoint.pt", "checkpoint.sha256", "checkpoint.json")}
+    _retry(runtime, lambda: volume.upload(files))
+
+
+def validate_training_resume(plan: TransferPlan, run_root: Path, *, seed: int) -> None:
+    """Validate the durable resume boundary before paid orchestration starts."""
+    identity = _training_identity(plan, seed, {})
+    rows = _read_training_progress(plan, run_root)
+    if not rows:
+        if (run_root / "checkpoint.pt").exists():
+            raise ValueError("training checkpoint has no relational progress")
+        return
+    if any(row.config_sha256 != identity for row in rows):
+        raise ValueError("training resume configuration mismatch")
+    latest = rows[-1]
+    digest = validate_checkpoint((run_root / latest.checkpoint_path).parent, identity)
+    if digest != latest.checkpoint_sha256:
+        raise ValueError("training progress checkpoint hash does not match its ledger")
+
+
 def execute_plan(
     plan: TransferPlan,
     runtime: RuntimeConfig,
@@ -184,7 +318,36 @@ def execute_plan(
     if plan.mode == "encode" and adopt_encoded is None:
         raise ValueError("text encoding requires a per-part adoption callback")
     checkpoint = run_root / "checkpoint.pt"
-    progress_path = run_root / "progress.json"
+    progress_rows: list[TrainingProgressRow] = []
+    identity = ""
+    if plan.mode == "train":
+        protected = {
+            "root",
+            "selected_indices",
+            "start_cursor",
+            "max_batches",
+            "global_cursor",
+            "config_sha256",
+            "epochs",
+            "seed",
+            "checkpoint_path",
+            "output_prefix",
+        }
+        if protected.intersection(payload_overrides or {}):
+            raise ValueError("training payload overrides contain protected orchestration fields")
+        identity = _training_identity(plan, seed, payload_overrides or {})
+        progress_rows = _read_training_progress(plan, run_root)
+        if any(row.config_sha256 != identity for row in progress_rows):
+            raise ValueError("training resume configuration mismatch")
+        if progress_rows:
+            latest = progress_rows[-1]
+            latest_root = (run_root / latest.checkpoint_path).parent
+            digest = validate_checkpoint(latest_root, identity)
+            if digest != latest.checkpoint_sha256:
+                raise ValueError("training progress checkpoint hash does not match its ledger")
+            _publish_latest_checkpoint(run_root, latest_root)
+        elif checkpoint.exists():
+            raise ValueError("training checkpoint has no relational progress")
     _upload(volume, runtime, plan.shared, "dataset")
     if checkpoint.is_file():
         files = {"checkpoint.pt": checkpoint}
@@ -194,7 +357,7 @@ def execute_plan(
                 files[name] = path
         _retry(runtime, lambda: volume.upload(files))
     metrics: dict[str, Any] = {"mode": plan.mode, "groups": 0}
-    cursor = int(json.loads(progress_path.read_text()).get("cursor", 0)) if progress_path.is_file() else 0
+    cursor = progress_rows[-1].cursor if progress_rows else 0
     try:
         if plan.mode == "encode":
             assert adopt_encoded is not None
@@ -259,13 +422,17 @@ def execute_plan(
             metrics.update(result)
             return metrics
         total = sum(len(group.indices) for group in plan.groups)
+        metrics.update({"cursor": cursor, "groups": len(progress_rows), "total_batches": total})
+        if progress_rows:
+            latest_root = (run_root / progress_rows[-1].checkpoint_path).parent
+            metrics.update(json.loads((latest_root / "metrics.json").read_text()))
+            metrics.update({"groups": len(progress_rows), "total_batches": total})
         for number, group in enumerate(plan.groups):
             group_start = min(group.indices)
-            if cursor >= group_start + len(group.indices):
-                metrics["groups"] = number
+            if number < len(progress_rows):
                 continue
-            local_start = max(0, cursor - group_start)
-            remaining = len(group.indices) - local_start
+            local_start = 0
+            remaining = len(group.indices)
             _upload(volume, runtime, group.files, "dataset")
             remote = f"outputs/group-{number:05d}"
             payload = {
@@ -273,6 +440,8 @@ def execute_plan(
                 "selected_indices": group.indices,
                 "start_cursor": local_start,
                 "max_batches": remaining,
+                "global_cursor": group_start,
+                "config_sha256": identity,
                 "epochs": epochs,
                 "seed": seed,
                 "checkpoint_path": "/scratch/checkpoint.pt",
@@ -281,24 +450,50 @@ def execute_plan(
                 **(payload_overrides or {}),
             }
             result = _retry(runtime, lambda payload=payload: runner.call("train_group", payload))
+            group_root = run_root / "checkpoints" / f"group-{number:05d}"
+            staging = group_root.with_name(f"{group_root.name}.partial")
+            if staging.exists():
+                shutil.rmtree(staging)
             download_outputs(
                 volume,
                 runtime,
                 remote,
-                run_root,
+                staging,
                 ["metrics.json", "checkpoint.pt", "checkpoint.sha256", "checkpoint.json"],
             )
+            expected_cursor = max(group.indices) + 1
+            if int(result.get("cursor", -1)) != expected_cursor or int(result.get("consumed", -1)) != remaining:
+                raise ValueError(f"training group {number} did not complete its expected batch range")
+            if json.loads((staging / "metrics.json").read_text()) != result:
+                raise ValueError(f"training group {number} returned mismatched metrics")
+            digest = validate_checkpoint(staging, identity, result)
+            if group_root.exists():
+                shutil.rmtree(group_root)
+            staging.rename(group_root)
+            progress_rows.append(
+                TrainingProgressRow(
+                    run_id=run_root.name,
+                    group_index=number,
+                    batch_start=group_start,
+                    batch_end=expected_cursor,
+                    epoch=int(result.get("epoch", 0)),
+                    cursor=expected_cursor,
+                    config_sha256=identity,
+                    checkpoint_path=str((group_root / "checkpoint.pt").relative_to(run_root)),
+                    checkpoint_sha256=digest,
+                )
+            )
+            _write_training_progress(run_root, progress_rows)
+            _publish_latest_checkpoint(run_root, group_root)
+            _upload_checkpoint(volume, runtime, group_root)
             for name in group.files:
                 _retry(runtime, lambda name=name: volume.remove(f"dataset/{name}"))
             _retry(runtime, lambda remote=remote: volume.remove(remote, recursive=True))
-            cursor = group_start + int(result.get("cursor", local_start + remaining))
+            cursor = expected_cursor
             metrics.update(result)
-            metrics["groups"] = number + 1
+            metrics["groups"] = len(progress_rows)
             metrics["cursor"] = cursor
             metrics["total_batches"] = total
-            atomic_write_json(progress_path, metrics)
-        if metrics["groups"] == 0 and progress_path.is_file():
-            metrics.update(json.loads(progress_path.read_text()))
         return metrics
     finally:
         _retry(runtime, lambda: volume.remove("dataset", recursive=True))
