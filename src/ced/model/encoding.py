@@ -334,22 +334,23 @@ def encode_batches(missing: Path, encoder: TextEncoder, batch_size: int) -> Iter
         yield texts, np.ascontiguousarray(vectors)
 
 
-def encode_missing_to_parts(
+def iter_encode_missing_parts(
     missing: Path, output: Path, encoder: TextEncoder, *, start_row: int = 0, start_part: int = 0
-) -> dict[str, Any]:
-    """Encode the missing-text Parquet into cache-compatible vector and index parts."""
+) -> Iterator[dict[str, Any]]:
+    """Encode lazily and yield one checksummed descriptor per completed part."""
     (output / "vectors").mkdir(parents=True, exist_ok=True)
     (output / "index").mkdir(parents=True, exist_ok=True)
     rows = 0
-    parts = 0
-    files: list[str] = []
-    for batch in pq.ParquetFile(missing).iter_batches(PART_ROWS, columns=["text_sha256", "text"]):
+    for part_offset, batch in enumerate(
+        pq.ParquetFile(missing).iter_batches(PART_ROWS, columns=["text_sha256", "text"])
+    ):
         texts = batch.column("text").to_pylist()
         keys = batch.column("text_sha256")
         vectors = np.ascontiguousarray(encoder.encode(texts).detach().cpu().numpy(), dtype=np.float32)
         if vectors.shape != (len(texts), encoder.dimension) or not np.isfinite(vectors).all():
             raise ValueError(f"invalid ensemble output shape or values: {vectors.shape}")
-        name = f"part-{start_part + parts:06d}.safetensors"
+        part = start_part + part_offset
+        name = f"part-{part:06d}.safetensors"
         index_name = Path(name).with_suffix(".parquet").name
         write_tensor(output / "vectors" / name, vectors)
         pq.write_table(
@@ -360,9 +361,31 @@ def encode_missing_to_parts(
             output / "index" / index_name,
             compression="zstd",
         )
-        files.extend((f"vectors/{name}", f"index/{index_name}"))
+        files = [f"vectors/{name}", f"index/{index_name}"]
+        descriptor = {
+            "groups": 0,
+            "input_row_start": rows,
+            "part": part,
+            "rows": len(texts),
+            "dimension": encoder.dimension,
+            "files": files,
+            "checksums": {name: sha256_file(output / name) for name in files},
+        }
+        yield descriptor
         rows += len(texts)
+
+
+def encode_missing_to_parts(
+    missing: Path, output: Path, encoder: TextEncoder, *, start_row: int = 0, start_part: int = 0
+) -> dict[str, Any]:
+    """Encode all missing texts through the resumable per-part implementation."""
+    rows = 0
+    parts = 0
+    files: list[str] = []
+    for descriptor in iter_encode_missing_parts(missing, output, encoder, start_row=start_row, start_part=start_part):
+        rows += descriptor["rows"]
         parts += 1
+        files.extend(descriptor["files"])
     return {"groups": 0, "rows": rows, "parts": parts, "dimension": encoder.dimension, "files": files}
 
 

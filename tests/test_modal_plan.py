@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
@@ -45,6 +46,9 @@ class FakeRunner:
     def __init__(self, volume: FakeVolume) -> None:
         self.volume = volume
         self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def stream(self, function: str, payload: dict[str, Any]):
+        raise AssertionError("stream is only used by encoding test runners")
 
     def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((function, payload))
@@ -206,28 +210,38 @@ def test_retry_does_not_swallow_persistent_failures(tmp_path: Path) -> None:
 
 
 def test_modal_encoding_transfers_only_missing_text_and_encoded_parts(tmp_path: Path) -> None:
+    pytest.importorskip("modal")
+    from ced.modal_app import ModalFunctionRunner
+
     missing = tmp_path / "missing.parquet"
     missing.write_bytes(b"texts")
     plan = TransferPlan(mode="encode", root=tmp_path, shared={"missing.parquet": missing}, shared_bytes=5)
     volume = FakeVolume()
+    payloads: list[dict[str, Any]] = []
+    outputs = {"vectors/part-000000.safetensors": b"vectors", "index/part-000000.parquet": b"index"}
 
-    class EncodingRunner:
-        def __init__(self) -> None:
-            self.payload: dict[str, Any] = {}
+    def remote_gen(payload: dict[str, Any], _volume: Any):
+        payloads.append(payload)
+        assert volume.files["dataset/missing.parquet"] == b"texts"
+        for name, content in outputs.items():
+            volume.files[f"outputs/encode/{name}"] = content
+        yield {
+            "groups": 0,
+            "input_row_start": 0,
+            "part": 0,
+            "rows": 1,
+            "dimension": 4,
+            "files": list(outputs),
+            "checksums": {name: hashlib.sha256(content).hexdigest() for name, content in outputs.items()},
+        }
 
-        def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]:
-            assert function == "encode_text"
-            self.payload = payload
-            assert volume.files["dataset/missing.parquet"] == b"texts"
-            volume.files["outputs/encode/vectors/part-000000.parquet"] = b"vectors"
-            volume.files["outputs/encode/index/part-000000.parquet"] = b"index"
-            return {
-                "groups": 0,
-                "rows": 1,
-                "files": ["vectors/part-000000.parquet", "index/part-000000.parquet"],
-            }
+    runner = ModalFunctionRunner({"encode_text": SimpleNamespace(remote_gen=remote_gen)}, volume)
+    adopted: list[dict[str, Any]] = []
 
-    runner = EncodingRunner()
+    def adopt(_root: Path, descriptor: dict[str, Any]) -> int:
+        adopted.append(descriptor)
+        return 1
+
     run_root = tmp_path / "run"
     run_root.mkdir()
     metrics = execute_plan(
@@ -236,14 +250,248 @@ def test_modal_encoding_transfers_only_missing_text_and_encoded_parts(tmp_path: 
         volume,
         runner,
         run_root,
-        payload_overrides={"ensemble": {"gpu": "L4"}, "start_row": 4, "start_part": 2},
+        payload_overrides={"ensemble": {"gpu": "L4"}, "start_row": 4, "start_part": 0},
+        adopt_encoded=adopt,
     )
     assert metrics["rows"] == 1
-    assert runner.payload["start_row"] == 4
-    assert runner.payload["start_part"] == 2
-    assert (run_root / "vectors" / "part-000000.parquet").read_bytes() == b"vectors"
+    assert payloads[0]["start_row"] == 4
+    assert payloads[0]["start_part"] == 0
+    assert adopted[0]["input_row_start"] == 0
+    assert (run_root / "vectors" / "part-000000.safetensors").read_bytes() == b"vectors"
     assert (run_root / "index" / "part-000000.parquet").read_bytes() == b"index"
     assert not any(key.startswith("outputs") for key in volume.files)
+
+
+def test_modal_encoding_adopts_parts_before_failure_and_antijoins_on_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A yielded prefix survives stream failure and is absent from later work.
+
+    Why: this exercises the cloud-cost boundary end to end with real Parquet and
+    Safetensors files. The fake generator fails only after its first yield; the
+    next request must contain just the unadopted suffix and must not be retried
+    blindly by the generic cloud retry wrapper.
+    """
+    import duckdb
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from ced.config.models import TextEncodingSettings
+    from ced.model.encoding import RandomTextEncoder, TextEmbeddingCache, iter_encode_missing_parts, text_key
+
+    monkeypatch.setattr("ced.model.encoding.PART_ROWS", 2)
+    requested = tmp_path / "requested.parquet"
+    texts = ["one", "two", "three"]
+    pq.write_table(pa.table({"text_sha256": [text_key(text) for text in texts], "text": texts}), requested)
+    cache = TextEmbeddingCache(tmp_path / "cache", TextEncodingSettings(provider="random", dimension=4))
+    config = runtime(tmp_path, retries=3, retry_base_seconds=0.001)
+    attempts = 0
+    stream_calls = 0
+
+    def invoke(missing: Path, *, fail: bool):
+        nonlocal attempts
+        attempts += 1
+        volume = FakeVolume()
+        plan = TransferPlan(
+            mode="encode",
+            root=missing.parent,
+            shared={"missing.parquet": missing},
+            shared_bytes=missing.stat().st_size,
+        )
+        manifest = cache.manifest()
+        staged = tmp_path / f"staged-{attempts}"
+
+        class StreamingRunner:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, Any]] = []
+
+            def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]:
+                raise AssertionError("encoding must use stream, not call")
+
+            def stream(self, function: str, payload: dict[str, Any]):
+                nonlocal stream_calls
+                assert function == "encode_text"
+                stream_calls += 1
+                self.calls.append(payload)
+                for descriptor in iter_encode_missing_parts(
+                    missing,
+                    staged,
+                    RandomTextEncoder(4),
+                    start_row=payload["start_row"],
+                    start_part=payload["start_part"],
+                ):
+                    for name in descriptor["files"]:
+                        volume.files[f"outputs/encode/{name}"] = (staged / name).read_bytes()
+                    yield descriptor
+                    if fail:
+                        raise RuntimeError("injected stream failure")
+
+        runner = StreamingRunner()
+        run_root = tmp_path / f"run-{attempts}"
+        run_root.mkdir()
+
+        def adopt(root: Path, descriptor: dict[str, Any]) -> int:
+            return cache.adopt_parts(
+                root,
+                missing,
+                input_row_start=descriptor["input_row_start"],
+                rows=descriptor["rows"],
+            )
+
+        metrics = execute_plan(
+            plan,
+            config,
+            volume,
+            runner,
+            run_root,
+            payload_overrides={"start_row": manifest["rows"], "start_part": len(manifest["parts"])},
+            adopt_encoded=adopt,
+        )
+        assert not any(key.startswith("outputs") for key in volume.files)
+        return runner, metrics
+
+    with pytest.raises(RuntimeError, match="injected stream failure"):
+        invoke(requested, fail=True)
+    assert stream_calls == 1
+    assert cache.manifest()["rows"] == 2
+
+    resumed = tmp_path / "resumed.parquet"
+    connection = duckdb.connect()
+    try:
+        cache.create_index(connection)
+        connection.execute(
+            f"""COPY (SELECT r.text_sha256, r.text FROM read_parquet('{requested}') r
+                    WHERE NOT EXISTS (SELECT 1 FROM cache_index c WHERE c.text_sha256=r.text_sha256)
+                    ORDER BY r.text) TO '{resumed}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
+        )
+    finally:
+        connection.close()
+    assert pq.read_table(resumed).column("text").to_pylist() == ["three"]
+
+    runner, metrics = invoke(resumed, fail=False)
+    assert len(runner.calls) == 1
+    assert runner.calls[0]["start_row"] == 2
+    assert runner.calls[0]["start_part"] == 1
+    assert metrics["rows"] == 1
+    assert cache.manifest()["rows"] == 3
+    assert pq.read_table(cache.index / "part-000001.parquet").column("row").to_pylist() == [2]
+
+
+@pytest.mark.parametrize(
+    ("mutation", "match"),
+    [
+        ("part", "unexpected encoded part"),
+        ("offset", "invalid encoded input slice"),
+        ("files", "exactly one vector/index pair"),
+        ("checksum_keys", "checksums do not match"),
+        ("checksum", "checksum mismatch"),
+        ("dimension", "inconsistent dimension"),
+        ("adoption", "adopted 0 rows, expected 1"),
+    ],
+)
+def test_modal_encoding_rejects_invalid_part_descriptors(tmp_path: Path, mutation: str, match: str) -> None:
+    """Unverified or inconsistent stream metadata cannot trigger adoption.
+
+    Why: descriptors cross a cloud/local trust boundary. Exact pair names prevent
+    traversal, offsets and dimensions prevent row corruption, and hashes prevent
+    partial downloads from becoming completed cache rows.
+    """
+    missing = tmp_path / "missing.parquet"
+    missing.write_bytes(b"texts")
+    plan = TransferPlan(mode="encode", root=tmp_path, shared={"missing.parquet": missing}, shared_bytes=5)
+    volume = FakeVolume()
+    outputs = {"vectors/part-000000.safetensors": b"vectors", "index/part-000000.parquet": b"index"}
+    for name, content in outputs.items():
+        volume.files[f"outputs/encode/{name}"] = content
+    descriptor: dict[str, Any] = {
+        "groups": 0,
+        "input_row_start": 0,
+        "part": 0,
+        "rows": 1,
+        "dimension": 4,
+        "files": list(outputs),
+        "checksums": {name: hashlib.sha256(content).hexdigest() for name, content in outputs.items()},
+    }
+    if mutation == "part":
+        descriptor["part"] = 1
+    elif mutation == "offset":
+        descriptor["input_row_start"] = 1
+    elif mutation == "files":
+        descriptor["files"] = ["../escape", "index/part-000000.parquet"]
+    elif mutation == "checksum_keys":
+        descriptor["checksums"] = {}
+    elif mutation == "checksum":
+        descriptor["checksums"]["vectors/part-000000.safetensors"] = "0" * 64
+    elif mutation == "dimension":
+        descriptor["dimension"] = 0
+
+    class Runner:
+        def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]:
+            raise AssertionError("encoding must stream")
+
+        def stream(self, function: str, payload: dict[str, Any]):
+            yield descriptor
+
+    adopted = []
+
+    def adopt(_root: Path, _descriptor: dict[str, Any]) -> int:
+        adopted.append(descriptor)
+        return 0 if mutation == "adoption" else 1
+
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    with pytest.raises(ValueError, match=match):
+        execute_plan(
+            plan,
+            runtime(tmp_path),
+            volume,
+            Runner(),
+            run_root,
+            payload_overrides={"start_part": 0},
+            adopt_encoded=adopt,
+        )
+    if mutation != "adoption":
+        assert not adopted
+
+
+def test_modal_encoding_requires_adoption_before_transfer(tmp_path: Path) -> None:
+    """Encoding without a durable adopter fails before consuming GPU output."""
+    missing = tmp_path / "missing.parquet"
+    missing.write_bytes(b"texts")
+    plan = TransferPlan(mode="encode", root=tmp_path, shared={"missing.parquet": missing}, shared_bytes=5)
+    volume = FakeVolume()
+    with pytest.raises(ValueError, match="requires a per-part adoption callback"):
+        execute_plan(plan, runtime(tmp_path), volume, FakeRunner(volume), tmp_path)
+    assert volume.files == {}
+
+
+def test_empty_text_encoding_returns_before_modal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The direct remote API rejects paid work for an empty missing relation.
+
+    Why: callers should be safe even if they bypass the higher-level semantic
+    workflow. Reading only Parquet metadata is enough to avoid confirmation,
+    ephemeral volumes, model downloads, and GPU container startup.
+    """
+    pytest.importorskip("modal")
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    import ced.modal_app as modal_app
+    from ced.config.models import TextEncodingSettings
+    from ced.model.encoding import TextEmbeddingCache
+
+    missing = tmp_path / "empty.parquet"
+    pq.write_table(pa.table({"text_sha256": pa.array([], pa.string()), "text": pa.array([], pa.string())}), missing)
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("empty encoding reached a paid or ephemeral Modal boundary")
+
+    monkeypatch.setattr(modal_app, "require_cpu_worker", lambda config: None)
+    monkeypatch.setattr(modal_app, "confirm_paid", forbidden)
+    monkeypatch.setattr(modal_app.modal.Volume, "ephemeral", forbidden)
+    cache = TextEmbeddingCache(tmp_path / "cache", TextEncodingSettings(provider="random", dimension=4))
+    modal_app.encode_text_remote(runtime(tmp_path), missing, cache)
+    assert not (tmp_path / "text-modal.partial").exists()
 
 
 def test_paid_modal_confirmation_requires_explicit_approval(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

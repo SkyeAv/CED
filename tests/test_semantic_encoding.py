@@ -18,6 +18,7 @@ from ced.model.encoding import (
     RandomTextEncoder,
     TextEmbeddingCache,
     encode_missing_to_parts,
+    iter_encode_missing_parts,
     text_key,
 )
 from ced.model.tensors import write_tensor
@@ -140,6 +141,45 @@ def test_sentence_transformer_components_use_text_only_document_settings(monkeyp
     assert isinstance(init, dict)
     assert init["tokenizer_kwargs"] == {"padding_side": "left"}
     assert encoder.prompt_name is None
+
+
+def test_encode_missing_streams_each_part(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Part generation is lazy and carries deterministic transfer metadata.
+
+    Why: the consumer must finish adopting one part before the encoder computes
+    the next. Descriptors also need stable offsets and checksums so interrupted
+    streams cannot publish partial or misordered files.
+    """
+    from ced.acquisition.base import sha256_file
+
+    monkeypatch.setattr("ced.model.encoding.PART_ROWS", 2)
+    missing = tmp_path / "missing.parquet"
+    texts = ["one", "two", "three"]
+    pq.write_table(pa.table({"text_sha256": [text_key(text) for text in texts], "text": texts}), missing)
+    encoded = tmp_path / "encoded"
+    encoded_texts: list[str] = []
+
+    class RecordingEncoder(RandomTextEncoder):
+        def encode(self, texts: Sequence[str]) -> torch.Tensor:
+            encoded_texts.extend(texts)
+            return super().encode(texts)
+
+    stream = iter_encode_missing_parts(missing, encoded, RecordingEncoder(4), start_row=8, start_part=4)
+    first = next(stream)
+    assert encoded_texts == ["one", "two"]
+    assert first["input_row_start"] == 0
+    assert first["part"] == 4
+    assert first["rows"] == 2
+    assert first["files"] == ["vectors/part-000004.safetensors", "index/part-000004.parquet"]
+    assert first["checksums"] == {name: sha256_file(encoded / name) for name in first["files"]}
+
+    second = next(stream)
+    assert encoded_texts == texts
+    assert second["input_row_start"] == 2
+    assert second["part"] == 5
+    assert second["rows"] == 1
+    with pytest.raises(StopIteration):
+        next(stream)
 
 
 def test_modal_parts_adopt_with_row_and_key_validation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

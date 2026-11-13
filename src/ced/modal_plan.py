@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,6 +40,8 @@ class VolumeClient(Protocol):
 
 class FunctionRunner(Protocol):
     def call(self, function: str, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def stream(self, function: str, payload: dict[str, Any]) -> Iterator[dict[str, Any]]: ...
 
 
 @dataclass
@@ -177,7 +179,10 @@ def execute_plan(
     epochs: int = 1,
     seed: int = 20261110,
     payload_overrides: Mapping[str, Any] | None = None,
+    adopt_encoded: Callable[[Path, dict[str, Any]], int] | None = None,
 ) -> dict[str, Any]:
+    if plan.mode == "encode" and adopt_encoded is None:
+        raise ValueError("text encoding requires a per-part adoption callback")
     checkpoint = run_root / "checkpoint.pt"
     progress_path = run_root / "progress.json"
     _upload(volume, runtime, plan.shared, "dataset")
@@ -192,20 +197,48 @@ def execute_plan(
     cursor = int(json.loads(progress_path.read_text()).get("cursor", 0)) if progress_path.is_file() else 0
     try:
         if plan.mode == "encode":
+            assert adopt_encoded is not None
             remote = "outputs/encode"
-            result = _retry(
-                runtime,
-                lambda: runner.call(
-                    "encode_text",
-                    {
-                        "root": "/scratch/text-encoding",
-                        "output_prefix": f"/data/{remote}",
-                        **(payload_overrides or {}),
-                    },
-                ),
-            )
-            download_outputs(volume, runtime, remote, run_root, result.pop("files"))
-            metrics.update(result)
+            payload = {
+                "root": "/scratch/text-encoding",
+                "output_prefix": f"/data/{remote}",
+                **(payload_overrides or {}),
+            }
+            metrics.update({"rows": 0, "parts": 0})
+            for streamed in runner.stream("encode_text", payload):
+                descriptor = dict(streamed)
+                files = descriptor.pop("files", None)
+                checksums = descriptor.pop("checksums", None)
+                part = int(descriptor.get("part", -1))
+                expected_part = int((payload_overrides or {}).get("start_part", 0)) + metrics["parts"]
+                if part != expected_part:
+                    raise ValueError(f"unexpected encoded part {part}; expected {expected_part}")
+                rows = int(descriptor.get("rows", 0))
+                input_row_start = int(descriptor.get("input_row_start", -1))
+                if rows <= 0 or input_row_start != metrics["rows"]:
+                    raise ValueError(
+                        f"invalid encoded input slice {input_row_start}:{input_row_start + rows} "
+                        f"at stream offset {metrics['rows']}"
+                    )
+                name = f"part-{part:06d}.safetensors"
+                expected_files = {f"vectors/{name}", f"index/{Path(name).with_suffix('.parquet').name}"}
+                if not isinstance(files, list) or len(files) != 2 or set(files) != expected_files:
+                    raise ValueError(f"encoded part {part} did not contain exactly one vector/index pair")
+                if not isinstance(checksums, dict) or set(checksums) != expected_files:
+                    raise ValueError(f"encoded part {part} checksums do not match its vector/index pair")
+                dimension = int(descriptor.get("dimension", 0))
+                if dimension <= 0 or metrics.get("dimension", dimension) != dimension:
+                    raise ValueError(f"encoded part {part} has an inconsistent dimension")
+                download_outputs(volume, runtime, remote, run_root, files)
+                validate_checksums(run_root, checksums)
+                adopted = adopt_encoded(run_root, dict(streamed))
+                if adopted != rows:
+                    raise ValueError(f"encoded part {part} adopted {adopted} rows, expected {rows}")
+                for name in files:
+                    _retry(runtime, lambda name=name: volume.remove(f"{remote}/{name}"))
+                metrics["rows"] += adopted
+                metrics["parts"] += 1
+                metrics["dimension"] = dimension
             return metrics
         if plan.mode == "evaluate":
             remote = "outputs/evaluate"
