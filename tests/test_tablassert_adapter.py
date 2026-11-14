@@ -27,7 +27,7 @@ def test_local_identity_is_stable_and_scoped() -> None:
 
 def test_all_family_and_book_sections_validate(tmp_path: Path) -> None:
     _, sections = adapter(tmp_path).sections()
-    assert len(sections) == 1422  # 612 family/book + 810 case-report sections
+    assert len(sections) == 1457  # 612 family/book + 845 case-report sections
     custom = 0
     for section in sections:
         tcode = section.tcode
@@ -41,12 +41,12 @@ def test_all_family_and_book_sections_validate(tmp_path: Path) -> None:
             custom += 1
             assert tcode.statement.predicate == "related_to"
             assert lineage["ced_predicate"] == "ced:has_mutation"
-    assert custom == 121  # 70 family + 51 case-report has_mutation sections
+    assert custom == 123  # 70 family + 53 case-report has_mutation sections
 
 
 def test_case_report_tables_are_single_documents_with_own_provenance() -> None:
     files = sorted(Path("src/ced/graphs/tables/case-reports").glob("PMC*/*.yaml"))
-    assert len(files) == 810
+    assert len(files) == 845
     for path in files:
         pmcid = path.parent.name
         table = yaml.safe_load(path.read_text(encoding="utf-8"))  # raises on multi-document files
